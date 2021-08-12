@@ -1,3 +1,4 @@
 packrat/lib*/
 .Rproj.user
 data/processed/unsupervised_random_forest_model_budgie_calls_stress_jun_2021.RDS
+data/processed/tailored_budgie_calls_sel_tab (cópia).csv
