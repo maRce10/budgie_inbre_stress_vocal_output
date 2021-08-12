@@ -1,0 +1,107 @@
+PackratFormat: 1.4
+PackratVersion: 0.6.0
+RVersion: 4.0.5
+Repos: CRAN=https://cloud.r-project.org
+
+Package: base64enc
+Source: CRAN
+Version: 0.1-3
+Hash: c590d29e555926af053055e23ee79efb
+
+Package: digest
+Source: CRAN
+Version: 0.6.27
+Hash: 8ba156629c1537635b39332c93d8ed33
+
+Package: evaluate
+Source: CRAN
+Version: 0.14
+Hash: 18306cc3bc1aec7b7360eea8a0eb0ee1
+
+Package: glue
+Source: CRAN
+Version: 1.4.2
+Hash: afa798ba9deec3676e20300b79094749
+
+Package: highr
+Source: CRAN
+Version: 0.9
+Hash: 375daf47b5970a62560496bb8c6b996e
+Requires: xfun
+
+Package: htmltools
+Source: CRAN
+Version: 0.5.1.1
+Hash: 297e3b95a781d9a6fb7259e0f6824020
+Requires: base64enc, digest, rlang
+
+Package: jsonlite
+Source: CRAN
+Version: 1.7.2
+Hash: a5965fb563ba3643e75c425a82f935e6
+
+Package: knitr
+Source: CRAN
+Version: 1.33
+Hash: 524120cce0a17c3ff73a852a5157374e
+Requires: evaluate, highr, xfun, markdown, stringr, yaml
+
+Package: magrittr
+Source: CRAN
+Version: 2.0.1
+Hash: d3c166b0573ae8c918edf7221dfe7380
+
+Package: markdown
+Source: CRAN
+Version: 1.1
+Hash: 1b6a18fd395589425e338a47b999099f
+Requires: xfun, mime
+
+Package: mime
+Source: CRAN
+Version: 0.10
+Hash: 20b0f90f3478d2baae76be49777ac9fe
+
+Package: packrat
+Source: CRAN
+Version: 0.6.0
+Hash: 62fd532b7524f498caa3cf4cc5f15490
+
+Package: rlang
+Source: CRAN
+Version: 0.4.11
+Hash: 765f56f2e0697cfd1ad4c9d34e4efedc
+
+Package: rmarkdown
+Source: CRAN
+Version: 2.8
+Hash: 55e0a5306c365512764716beae50a86c
+Requires: evaluate, htmltools, jsonlite, knitr, stringr, xfun, yaml,
+    tinytex
+
+Package: stringi
+Source: CRAN
+Version: 1.6.2
+Hash: 94819f7cabf098fcfca17cd9050f5e25
+
+Package: stringr
+Source: CRAN
+Version: 1.4.0
+Hash: 67da32dbb2a7a16f2ef124336358e54a
+Requires: glue, magrittr, stringi
+
+Package: tinytex
+Source: CRAN
+Version: 0.31
+Hash: 367f718b51aec5221f65972d8aabb18e
+Requires: xfun
+
+Package: xfun
+Source: CRAN
+Version: 0.23
+Hash: 65a60ffd6c0d4bdbfb992560c5827bfc
+
+Package: yaml
+Source: CRAN
+Version: 2.2.1
+Hash: 424bc11cc358f23187feaa7978628196

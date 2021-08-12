@@ -1,0 +1,261 @@
+---
+title: <center><font size="6"><b>Quantifying acoustic structure in budgie contact calls</b></font></center>
+subtitle: <center><font size="4"><b>Budgie INBRE stress and contact calls</b></font></center>
+author: <center><font size="4"><a href="http://marceloarayasalas.weebly.com/">Marcelo Araya-Salas, PhD</a> & <a href="https://www.batcr.com/">Gloriana Chaverri, PhD</a></font></center>
+date: <center>`r format(Sys.Date(), "%d-%m-%Y")`</center>
+output:
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_depth: 3
+    df_print: kable
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+fontsize: 12pt 
+editor_options: 
+  chunk_output_type: console
+---
+
+### Load packages
+
+```{r packages, message = FALSE, warning = FALSE, echo = TRUE, eval = TRUE}
+
+## add 'developer' to packages to be installed from github
+x <- c("data.table", "lubridate", "devtools", "maRce10/warbleR", "readxl", "ranger", "caret", "e1071", "pbapply", "viridis", "ggplot2", "kableExtra", "rlang", "Sim.DiffProc", "soundgen")
+
+aa <- lapply(x, function(y) {
+  
+  # get pakage name
+  pkg <- strsplit(y, "/")[[1]]
+  pkg <- pkg[length(pkg)]
+  
+  # check if installed, if not then install 
+  if (!pkg %in% installed.packages()[,"Package"])  {
+
+      if (grepl("/", y))  devtools::install_github(y, force = TRUE) else
+    install.packages(y) 
+    }
+
+  # load package
+  a <- try(require(pkg, character.only = T), silent = T)
+
+  if (!a) remove.packages(pkg)
+  })
+
+```
+
+### Functions and global parameters
+
+```{r functions and parameters, eval = TRUE, echo = TRUE}
+
+warbleR_options(wl = 300, parallel = 1, bp = c(0.5, 8), fast = TRUE, threshold = 15, ovlp = 20)
+
+opts_knit$set(root.dir = "..")
+
+# set evaluation false
+opts_chunk$set( fig.width = 6, fig.height = 3, eval = FALSE, warning = FALSE, message = FALSE, tidy = TRUE)
+
+num.trees <- 10000
+```
+
+### Read data from Keen et al 2021
+
+```{r read detections and prepare data, eval = TRUE}
+# read ext sel tab calls
+labeled_calls <- readRDS("./data/raw/budgie call EST ms dataset.RDS")
+
+# subset to unambiguous call types
+labeled_calls <- labeled_calls[labeled_calls$Call.Type %in% grep("2", unique(labeled_calls$Call.Type), invert = TRUE, value = TRUE), ]
+
+# resample to 22.05 kHz
+labeled_calls <- resample_est_waves(labeled_calls, samp.rate = 22.05, pb = FALSE)
+```
+
+
+```{r read detections and prepare data counts, eval = TRUE, results='asis'}
+
+df <- as.data.frame(table(labeled_calls$Call.Type))
+
+names(df) <- c("Call_type", "Sample_size")
+
+kb <-kable(df, row.names = FALSE) 
+  
+kb <- kable_styling(kb, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+  
+print(kb)
+
+```
+
+
+
+### Measure acoustic parameters
+
+```{r measure acoustic parameters for each group}
+
+# function to get acoustic parameters
+acous_param_fun <- function(x) {
+  
+    # measure acoustics parameters
+    sp <- spectro_analalysis(x, pb = FALSE, harmonicity = FALSE, threshold = 5)
+    
+    # measure cepstral coeffs
+    cc <- mfcc_stats(x, pb = FALSE)[, -c(1, 2)]
+  
+    # spectrographic cross correlation
+    spxc <- xcorr(x, pb = FALSE)
+    
+    # MDS
+    spxc <- cmdscale(1 - spxc, k = 10, list. = TRUE)
+  
+    spxc_mds <- spxc$points
+    
+    colnames(spxc_mds) <- paste0("spxcMDS", 1:ncol(spxc_mds))
+     
+    # mfcc cross correlation
+    mfccxc <- xcorr(x, pb = FALSE, type = "mfcc")
+    
+    # MDS
+    mfccxc <- cmdscale(1 - mfccxc, k = 10, list. = TRUE)
+  
+    mfxc_mds <- mfccxc$points
+    
+    colnames(mfxc_mds) <- paste0("mfxcMDS", 1:ncol(mfxc_mds))
+  
+    # dynamic time warping
+    fre_cntrs <- freq_ts(x, img = FALSE, pb = FALSE, threshold.time = 1)
+  
+    # replace NAs with mean values for each column
+    if (anyNA(fre_cntrs))
+    for(i in 3:ncol(fre_cntrs))
+      fre_cntrs[is.na(fre_cntrs[,i]), i] <- mean(fre_cntrs[, i], na.rm = TRUE)
+      
+    dtw.dists <- freq_DTW(x, img = FALSE, pb = FALSE, threshold.time = 1, ts.df = fre_cntrs)
+  
+    # MDS
+    dtw_mds <- cmdscale(dtw.dists, k = 10, list. = TRUE)$points
+    
+    # fix colnames
+    colnames(dtw_mds) <- paste0("dtwMDS", 1:ncol(dtw_mds))
+  
+    # put parameters in a list
+    all_params <- data.frame(sp, cc, dtw_mds, spxc_mds, mfxc_mds)
+    
+    # scale for random forest
+    all_params[,-c(1, 2)] <- scale(all_params[,-c(1, 2)])
+    
+    # add individual and experiment
+    all_params$call.type <- x$Call.Type[1]
+
+    return(all_params)
+    } 
+
+labeled_calls_l <- split(labeled_calls, labeled_calls$Call.Type)
+
+# loop to measure acoustic parameters on each group
+acous_param_l <- lapply(labeled_calls_l, FUN = function(x) try(acous_param_fun(x), silent = TRUE))
+
+
+acous_param <- do.call(rbind, acous_param_l)
+
+names(acous_param)[(sapply(acous_param, anyNA))]
+
+# save as RDS
+saveRDS(acous_param, "./data/processed/acoustic_parameters_test_for_best_parameter_combination.RDS")
+
+
+```
+
+### Run random forest with different acoustic parameter subsets
+
+```{r run random forest all groups}
+
+# read acoustic parameter data
+acous_param <- readRDS("./data/processed/acoustic_parameters_test_for_best_parameter_combination.RDS")
+
+# exclude groups in which the solo flight audio is uncertain for some individuals 
+
+# which parameters would be measured
+param_categories <- c("mfcc",  "spxc", "mfxc", "dtw", "sp")
+
+# get actual parameter names
+col_names <- names(acous_param)
+col_names <- col_names[!col_names %in% c("sound.files", "selec","call.type")]
+
+# measurement category for each measruremnt
+clss_col_names <- col_names
+
+# name it by measurement function 
+for (i in  1:length(param_categories))
+ clss_col_names[if (param_categories[i] != "sp") 
+                            grepl(c("cc", "spxc", "mfxc", "dtw")[i], col_names) else
+                            !grepl("cc|xc|dtw|indiv|sound.files|selec", col_names)] <- param_categories[i]
+
+# cbind(col_names, clss_col_names)
+
+
+# all posible combinations
+combs4 <- combn(param_categories, 4)
+combs3 <- combn(param_categories, 3)
+combs2 <- combn(param_categories, 2)
+
+# ake it a list
+combs <- c(as.data.frame(combs4), as.data.frame(combs3), as.data.frame(combs2))
+
+# add all 4 parameters as an option to the list
+combs <- c(append(combs, list(param_categories)), param_categories)
+
+combs <- sample(combs)
+
+# loop
+out <- pblapply(1:length(combs), cl = 3, function(i) {
+    
+    # subset columns to keep only those from selected acoustic measurements 
+    X <- acous_param[ , c(col_names[clss_col_names %in% c(combs[[i]])], "call.type")]
+   
+  # make it a factor for ranger to work 
+  X$call.type <- as.factor(X$call.type)
+  
+  # run RF model spectral and cepstral parameters
+  rfm <- ranger(
+      call.type ~ .,
+      data = X,
+      num.trees = num.trees,
+      importance = "impurity")
+    
+  res <- data.frame(parameters = paste(combs[[i]], collapse = "-"), error = rfm$prediction.error)  
+  return(res)
+})
+
+rf_perfomance_acous_params <- do.call(rbind, out)
+
+rf_perfomance_acous_params <- rf_perfomance_acous_params[order(rf_perfomance_acous_params$error, decreasing = FALSE), ]
+
+# save as RDS
+saveRDS(rf_perfomance_acous_params, "./data/processed/random_forest_performance by_acoustic_parameters_combinations.RDS")
+
+```
+
+## Out-of-bar error by measuring method combination
+
+```{r, eval = TRUE, results='asis'}
+
+rf_perfomance_acous_params <- readRDS("./data/processed/random_forest_performance by_acoustic_parameters_combinations.RDS")
+
+kb <-kable(rf_perfomance_acous_params, row.names = FALSE) 
+  
+kb <- kable_styling(kb, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+  
+print(kb)
+
+```
+
+---
+
+<font size="4">Session information</font>
+
+```{r session info, echo=F, eval = TRUE}
+
+sessionInfo()
+
+```
