@@ -2,3 +2,10 @@ packrat/lib*/
 .Rproj.user
 data/processed/unsupervised_random_forest_model_budgie_calls_stress_jun_2021.RDS
 data/processed/tailored_budgie_calls_sel_tab (cópia).csv
+data/processed/behavioral_response_models.RDS
+data/processed/physiological_response_models.RDS
+data/processed/stress_on_learning_models.RDS
+data/processed/stress_on_learning_models_week_2.RDS
+data/processed/stress_on_learning_models_week_3.RDS
+data/processed/treatment_models.RDS
+data/processed/treatment_models_week_factor.RDS
