@@ -21,7 +21,7 @@ editor_options:
 ```{r packages, message = FALSE, warning = FALSE, echo = TRUE, eval = TRUE}
 
 ## add 'developer' to packages to be installed from github
-x <- c("lubridate", "readxl", "pbapply", "viridis", "ggplot2", "kableExtra", "knitr", "formatR", "randomForest", "Rtsne", "MASS", "adehabitatHR", "sp", "GGally", "spatstat", "raster", "vegan")
+x <- c("remotes", "lubridate", "readxl", "pbapply", "viridis", "ggplot2", "kableExtra", "knitr", "formatR", "randomForest", "Rtsne", "MASS", "adehabitatHR", "sp", "GGally", "spatstat", "raster", "vegan", "maRce10/PhenotypeSpace")
 
 aa <- lapply(x, function(y) {
   
@@ -32,7 +32,7 @@ aa <- lapply(x, function(y) {
   # check if installed, if not then install 
   if (!pkg %in% installed.packages()[,"Package"])  {
 
-      if (grepl("/", y))  devtools::install_github(y, force = TRUE) else
+      if (grepl("/", y))  remotes::install_github(y, force = TRUE) else
     install.packages(y) 
     }
 
@@ -50,18 +50,76 @@ aa <- lapply(x, function(y) {
 opts_knit$set(root.dir = "..")
 
 # set evaluation false
-opts_chunk$set( fig.width = 6, fig.height = 3, warning = FALSE, message = FALSE, tidy = TRUE)
+opts_chunk$set(fig.width = 6, fig.height = 3, warning = FALSE, message = FALSE, tidy = TRUE)
 
 read_excel_df <- function(...) data.frame(read_excel(...))
+
+trait_space_plot <- function(X, dimensions, group, indices, basecex = 1, title = "", colors = c("#3E4A89FF", "#35B779FF"), point.alpha = 0.7, background.indices = NULL, pch = 1, labels = c("sub-space", "total space"), legend = TRUE) {
+
+   total_coors <- as.ppp(as.matrix(X[, dimensions]), c(range(X[, dimensions[1]]), range(X[, dimensions[2]])))
+  total_space <- raster(density.ppp(total_coors))
+
+  xlim <- range(X[, dimensions[1]]) 
+  ylim <-  range(X[, dimensions[2]])
+   # ylim <- if (is.null(background.indices))
+   #  range(X[, dimensions[2]]) else 
+   #    c(min(X[, dimensions[2]]), c(max(X[, dimensions[2]]) + (max(X[, dimensions[2]]) - min(X[, dimensions[2]])) * 0.11))
+  
+  plot(x = X[, dimensions[1]], y = X[, dimensions[2]], col = "white", cex = basecex, xlab = dimensions[1], ylab= dimensions[2], xlim = xlim, ylim = ylim, cex.lab = basecex, xaxs="i", yaxs="i") 
+
+  # add background group
+  if (!is.null(background.indices)){
+      
+  # get points  
+  Y_bg <- X[background.indices, ]
+    
+    if (nrow(Y_bg) > 1 & point.alpha > 0)
+      points(Y_bg[, dimensions[1]], Y_bg[, dimensions[2]], col = adjustcolor(colors[2], alpha.f = point.alpha), pch = pch)
+    
+    if (nrow(Y_bg) > 4){
+  coors <- as.ppp(as.matrix(Y_bg[, dimensions]), c(range(Y_bg[, dimensions[1]]), range(Y_bg[, dimensions[2]])))
+      
+ raster_dens <- raster(density.ppp(coors))
+
+  palpre <-  colorRampPalette(c("white", colors[2]))    
+  colsn <- 10
+  palpre2 <- sapply(1:colsn, function(x) adjustcolor(col =  palpre(colsn)[x], alpha = seq(0.1, 0.9, length.out = 20)[x]))
+  
+  image(raster_dens, add = TRUE, col = palpre2)
+  }
+  
+  }
+  
+  Y <- X[indices, ]
+  
+  if (nrow(Y) > 1 & point.alpha > 0)
+      points(Y[, dimensions[1]], Y[, dimensions[2]], col = adjustcolor(colors[1], alpha.f = point.alpha), pch = pch)
+   
+    if (nrow(Y) > 4){
+  coors <- as.ppp(as.matrix(Y[, dimensions]), c(range(Y[, dimensions[1]]), range(Y[, dimensions[2]])))
+      
+ raster_dens <- raster(density.ppp(coors))
+
+  palpre <-  colorRampPalette(c("white", colors[1]))    
+  colsn <- 10
+  palpre2 <- sapply(1: colsn, function(x) adjustcolor(col =  palpre(colsn)[x], alpha = seq(0.1, 0.9, length.out = 20)[x]))
+  
+  image(raster_dens, add = TRUE, col = palpre2)
+    }
+  
+   usr <- par()$usr
+  
+  # legend  
+  if (!is.null(background.indices) & legend)
+  # legend(y = rep(usr[4] + ((usr[4] - usr[3]) * 0.05), 2), x = c(usr[1] + (usr[2] - usr[1]) * 0.25, usr[1] + (usr[2] - usr[1]) * 0.75), col = colors, legend = labels, pch = c(pch, pch), cex = basecex * 1.5, bty = "n", horiz = TRUE, xjust = 0)
+  legend("topright", col = colors, legend = labels, pch = c(pch, pch), cex = basecex * 1.5, xjust = 0, bg = adjustcolor("white", alpha.f = 0.5))
+  
+  title(title, cex.main = basecex * 1.2)
+}
 
 # for reading months in english format
 sl <- Sys.setlocale(locale = "en_US.UTF-8")
 
-```
-
-
-```{r, echo = FALSE}
-source("./scripts/acoustic_space_area.R")
 ```
 
 
@@ -111,146 +169,145 @@ metadat <- read_excel_df("./data/raw/INBREStress_MasterDataSheet_14Nov19.xlsx")
 sels$ID[sels$ID == "125YGMM"] <- "125YGHM"
 sels$ID[sels$ID == "394YBHM"] <- "394WBHM"
 
-# setdiff(sels$ID, metadat$Bird.ID)
-# setdiff(metadat$Bird.ID, sels$ID)
+# setdiff(sels$ID, metadat$Bird.ID) setdiff(metadat$Bird.ID, sels$ID)
 
 sels$treatment <- sapply(1:nrow(sels), function(x) {
-  
-  metadat$Treatment[metadat$Bird.ID == sels$ID[x]][1] 
-  
+
+    metadat$Treatment[metadat$Bird.ID == sels$ID[x]][1]
+
 })
 
 
 sels$treatment.room <- sapply(1:nrow(sels), function(x) {
-  
-  metadat$Treatment.Room[metadat$Bird.ID == sels$ID[x]][1] 
-  
+
+    metadat$Treatment.Room[metadat$Bird.ID == sels$ID[x]][1]
+
 })
 
 
 sels$round <- sapply(1:nrow(sels), function(x) {
-  
-  metadat$Round[metadat$Bird.ID == sels$ID[x]][1] 
-  
+
+    metadat$Round[metadat$Bird.ID == sels$ID[x]][1]
+
 })
 
 sels$source.room <- sapply(1:nrow(sels), function(x) {
-  
-  metadat$Source.Room[metadat$Bird.ID == sels$ID[x]][1] 
-  
+
+    metadat$Source.Room[metadat$Bird.ID == sels$ID[x]][1]
+
 })
 
 sels$record.group <- sapply(1:nrow(sels), function(x) {
-  
-  metadat$Record.Group[metadat$Bird.ID == sels$ID[x]][1] 
-  
+
+    metadat$Record.Group[metadat$Bird.ID == sels$ID[x]][1]
+
 })
 
 
 # add week
-out <- lapply(unique(sels$round), function(x){
-  
-  Y <- sels[sels$round == x, ]
-  
-  min_date <- min(Y$date)
-  week_limits <- min_date + seq(0, 100,  by = 7)
-  
-  
-  Y$week <- NA
-  for (i in 2:length(week_limits))
-  Y$week[Y$date >= week_limits[i - 1] & Y$date < week_limits[i]] <- i - 1
-  
-  return(Y)
+out <- lapply(unique(sels$round), function(x) {
+
+    Y <- sels[sels$round == x, ]
+
+    min_date <- min(Y$date)
+    week_limits <- min_date + seq(0, 100, by = 7)
+
+    Y$week <- NA
+    for (i in 2:length(week_limits)) Y$week[Y$date >= week_limits[i - 1] & Y$date <
+        week_limits[i]] <- i - 1
+
+    return(Y)
 })
 
 sels <- do.call(rbind, out)
 
 
 sels$cort.baseline <- sapply(1:nrow(sels), function(x) {
-  
-  if (sels$week[x] == 1)  
-    out <- metadat$D3.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1] 
-  
-  if (sels$week[x] == 2)  
-    out <- metadat$D7.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1] 
 
-  if (sels$week[x] == 3)  
-    out <- metadat$D14.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 1)
+        out <- metadat$D3.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1]
 
-  if (sels$week[x] == 4)  
-    out <- metadat$D21.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 2)
+        out <- metadat$D7.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1]
 
-  if (sels$week[x] == 5)  
-    out <- metadat$D28.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 3)
+        out <- metadat$D14.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1]
 
-  return(out)
+    if (sels$week[x] == 4)
+        out <- metadat$D21.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1]
+
+    if (sels$week[x] == 5)
+        out <- metadat$D28.CORT.Baseline[metadat$Bird.ID == sels$ID[x]][1]
+
+    return(out)
 })
 
 
 sels$cort.stress <- sapply(1:nrow(sels), function(x) {
-  
-  if (sels$week[x] == 1)  
-    out <- metadat$D3.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1] 
-  
-  if (sels$week[x] == 2)  
-    out <- metadat$D7.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1] 
 
-  if (sels$week[x] == 3)  
-    out <- metadat$D14.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 1)
+        out <- metadat$D3.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1]
 
-  if (sels$week[x] == 4)  
-    out <- metadat$D21.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 2)
+        out <- metadat$D7.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1]
 
-  if (sels$week[x] == 5)  
-    out <- metadat$D28.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 3)
+        out <- metadat$D14.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1]
+
+    if (sels$week[x] == 4)
+        out <- metadat$D21.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1]
+
+    if (sels$week[x] == 5)
+        out <- metadat$D28.CORT.Stress[metadat$Bird.ID == sels$ID[x]][1]
 
     return(out)
 })
 
+sels$stress.response <- sels$cort.stress - sels$cort.baseline
 
 sels$weight <- sapply(1:nrow(sels), function(x) {
-  
-  if (sels$week[x] == 1)  
-    out <- metadat$D3.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1] 
-  
-  if (sels$week[x] == 2)  
-    out <- metadat$D7.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1] 
 
-  if (sels$week[x] == 3)  
-    out <- metadat$D14.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 1)
+        out <- metadat$D3.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1]
 
-  if (sels$week[x] == 4)  
-    out <- metadat$D21.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 2)
+        out <- metadat$D7.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1]
 
-  if (sels$week[x] == 5)  
-    out <- metadat$D28.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 3)
+        out <- metadat$D14.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1]
 
-    return(out)  
+    if (sels$week[x] == 4)
+        out <- metadat$D21.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1]
+
+    if (sels$week[x] == 5)
+        out <- metadat$D28.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1]
+
+    return(out)
 })
 
 
 sels$breath.count <- sapply(1:nrow(sels), function(x) {
-  
-  if (sels$week[x] == 1)  
-    out <- metadat$D3.Breath.Count[metadat$Bird.ID == sels$ID[x]][1] 
-  
-  if (sels$week[x] == 2)  
-    out <- metadat$D7.Breath.Count[metadat$Bird.ID == sels$ID[x]][1] 
 
-  if (sels$week[x] == 3)  
-    out <- metadat$D14.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 1)
+        out <- metadat$D3.Breath.Count[metadat$Bird.ID == sels$ID[x]][1]
 
-  if (sels$week[x] == 4)  
-    out <- metadat$D21.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 2)
+        out <- metadat$D7.Breath.Count[metadat$Bird.ID == sels$ID[x]][1]
 
-  if (sels$week[x] == 5)  
-    out <- metadat$D28.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1] 
+    if (sels$week[x] == 3)
+        out <- metadat$D14.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1]
+
+    if (sels$week[x] == 4)
+        out <- metadat$D21.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1]
+
+    if (sels$week[x] == 5)
+        out <- metadat$D28.Bird.Weight..g.[metadat$Bird.ID == sels$ID[x]][1]
 
     return(out)
 })
 
 
-#remove week 5
+# remove week 5
 sels <- sels[sels$week != 5, ]
 
 ```
@@ -260,85 +317,120 @@ sels <- sels[sels$week != 5, ]
 ## Physiological parameters
 ```{r, fig.width = 16, fig.height = 10, eval = TRUE}
 
-breath.count <- stack(metadat[, c("D3.Breath.Count", "D7.Breath.Count", "D14.Breath.Count", "D21.Breath.Count", "D28.Breath.Count")])
+breath.count <- stack(metadat[, c("D3.Breath.Count", "D7.Breath.Count", "D14.Breath.Count",
+    "D21.Breath.Count", "D28.Breath.Count")])
 
-weight <- stack(metadat[, c("D3.Bird.Weight..g.", "D7.Bird.Weight..g.", "D14.Bird.Weight..g.", "D21.Bird.Weight..g.", "D28.Bird.Weight..g.")])
+weight <- stack(metadat[, c("D3.Bird.Weight..g.", "D7.Bird.Weight..g.", "D14.Bird.Weight..g.",
+    "D21.Bird.Weight..g.", "D28.Bird.Weight..g.")])
 
-cort.stress <- stack(metadat[, c("D3.CORT.Stress", "D7.CORT.Stress", "D14.CORT.Stress", "D21.CORT.Stress", "D28.CORT.Stress")])
+cort.stress <- stack(metadat[, c("D3.CORT.Stress", "D7.CORT.Stress", "D14.CORT.Stress",
+    "D21.CORT.Stress", "D28.CORT.Stress")])
 
-cort.baseline <- stack(metadat[, c("D3.CORT.Baseline", "D7.CORT.Baseline", "D14.CORT.Baseline", "D21.CORT.Baseline", "D28.CORT.Baseline")])
+cort.baseline <- stack(metadat[, c("D3.CORT.Baseline", "D7.CORT.Baseline", "D14.CORT.Baseline",
+    "D21.CORT.Baseline", "D28.CORT.Baseline")])
 
 
-
-stress <- data.frame(metadat[, c("Bird.ID", "Treatment", "Round", "Treatment.Room")], week = breath.count$ind, breath.count = breath.count$values, weight = weight$values, cort.stress = cort.stress$values, cort.baseline = cort.baseline$values)
+stress <- data.frame(metadat[, c("Bird.ID", "Treatment", "Round", "Treatment.Room")],
+    week = breath.count$ind, breath.count = breath.count$values, weight = weight$values,
+    cort.stress = cort.stress$values, cort.baseline = cort.baseline$values, stress.response = cort.stress$values -
+        cort.baseline$values)
 
 # head(stress)
 
-stress$week <- factor(sapply(strsplit(as.character(stress$week), "\\."), "[[", 1), levels = c("D3", "D7", "D14", "D21", "D28")) 
+stress$week <- factor(sapply(strsplit(as.character(stress$week), "\\."), "[[", 1),
+    levels = c("D3", "D7", "D14", "D21", "D28"))
 
 stress$day <- as.numeric(gsub("D", "", as.character(stress$week)))
 stress$round <- paste("Round", stress$Round)
 
-stress$treatment <- factor(stress$Treatment, levels = c("Control", "Medium Stress", "High Stress"))
+stress$treatment <- factor(stress$Treatment, levels = c("Control", "Medium Stress",
+    "High Stress"))
 
 # remove 5th week
 stress <- stress[stress$week != "D28", ]
 
-stress_l <- lapply(stress$Bird.ID, function(x){ 
-  X <- stress[stress$Bird.ID == x, ]
-  
-  X$breath.count <- X$breath.count - X$breath.count[X$week == "D3"]
-  X$weight <- X$weight - X$weight[X$week == "D3"]
-  X$cort.stress <- X$cort.stress - X$cort.stress[X$week == "D3"]
-  X$cort.baseline <- X$cort.baseline - X$cort.baseline[X$week == "D3"]
+
+stress_l <- lapply(stress$Bird.ID, function(x) {
+    X <- stress[stress$Bird.ID == x, ]
+
+    X$breath.count <- X$breath.count - X$breath.count[X$week == "D3"]
+    X$weight <- X$weight - X$weight[X$week == "D3"]
+    X$cort.stress <- X$cort.stress - X$cort.stress[X$week == "D3"]
+    X$cort.baseline <- X$cort.baseline - X$cort.baseline[X$week == "D3"]
+    X$stress.response <- X$stress.response - X$stress.response[X$week == "D3"]
 
     return(X)
-  })
+})
 
 stress <- do.call(rbind, stress_l)
 
 ggplot(data = stress, aes(x = day, y = weight, group = Bird.ID, col = treatment)) +
-    geom_point() +
-    geom_line(size = 1.2) +
-    scale_color_viridis_d(begin = 0.1, end = 0.9) +
-    facet_wrap(~ round, ncol = 2) +
-    labs(y = "Weight (g)", x = "Day sample was taken") +
-    theme_classic(base_size = 30) + 
-    scale_x_continuous(breaks = c(3, 7, 14, 21, 28), labels = c(3, 7, 14, 21, 28)) + 
-    theme(legend.position = c(0.8, 0.25))
-
+    geom_point() + geom_line(size = 1.2) + scale_color_viridis_d(begin = 0.1, end = 0.9) +
+    facet_wrap(~round, ncol = 2) + labs(y = "Weight (g)", x = "Day sample was taken") +
+    theme_classic(base_size = 30) + scale_x_continuous(breaks = c(3, 7, 14, 21, 28),
+    labels = c(3, 7, 14, 21, 28)) + theme(legend.position = c(0.8, 0.25))
 
 ggplot(data = stress, aes(x = day, y = breath.count, group = Bird.ID, col = treatment)) +
-    geom_point() +
-    geom_line(size = 1.2) +
-    scale_color_viridis_d(begin = 0.1, end = 0.9) +
-    facet_wrap(~ round, ncol = 2) +
-    labs(y = "Breath count", x = "Day sample was taken") +
-    theme_classic(base_size = 30) + 
-    scale_x_continuous(breaks = c(3, 7, 14, 21, 28), labels = c(3, 7, 14, 21, 28)) + 
-    theme(legend.position = c(0.8, 0.25))
+    geom_point() + geom_line(size = 1.2) + scale_color_viridis_d(begin = 0.1, end = 0.9) +
+    facet_wrap(~round, ncol = 2) + labs(y = "Breath count", x = "Day sample was taken") +
+    theme_classic(base_size = 30) + scale_x_continuous(breaks = c(3, 7, 14, 21, 28),
+    labels = c(3, 7, 14, 21, 28)) + theme(legend.position = c(0.8, 0.25))
 
 ggplot(data = stress, aes(x = day, y = cort.baseline, group = Bird.ID, col = treatment)) +
-    geom_point() +
-    geom_line(size = 1.2) +
-    scale_color_viridis_d(begin = 0.1, end = 0.9) +
-    facet_wrap(~ round, ncol = 2) +
-    labs(y = "Baseline CORT", x = "Day sample was taken") +
-    theme_classic(base_size = 30) + 
-    scale_x_continuous(breaks = c(3, 7, 14, 21, 28), labels = c(3, 7, 14, 21, 28)) + 
-    theme(legend.position = c(0.8, 0.25))
+    geom_point() + geom_line(size = 1.2) + scale_color_viridis_d(begin = 0.1, end = 0.9) +
+    facet_wrap(~round, ncol = 2) + labs(y = "Baseline CORT", x = "Day sample was taken") +
+    theme_classic(base_size = 30) + scale_x_continuous(breaks = c(3, 7, 14, 21, 28),
+    labels = c(3, 7, 14, 21, 28)) + theme(legend.position = c(0.8, 0.25))
 
 ggplot(data = stress, aes(x = day, y = cort.stress, group = Bird.ID, col = treatment)) +
-    geom_point() +
-    geom_line(size = 1.2) +
-    scale_color_viridis_d(begin = 0.1, end = 0.9) +
-    facet_wrap(~ round, ncol = 2) +
-    labs(y = "Stress CORT", x = "Day sample was taken") +
-    theme_classic(base_size = 30) + 
-    scale_x_continuous(breaks = c(3, 7, 14, 21, 28), labels = c(3, 7, 14, 21, 28)) + 
-    theme(legend.position = c(0.8, 0.25))
+    geom_point() + geom_line(size = 1.2) + scale_color_viridis_d(begin = 0.1, end = 0.9) +
+    facet_wrap(~round, ncol = 2) + labs(y = "Stress CORT", x = "Day sample was taken") +
+    theme_classic(base_size = 30) + scale_x_continuous(breaks = c(3, 7, 14, 21, 28),
+    labels = c(3, 7, 14, 21, 28)) + theme(legend.position = c(0.8, 0.25))
 
+ggplot(data = stress, aes(x = day, y = stress.response, group = Bird.ID, col = treatment)) +
+    geom_point() + geom_line(size = 1.2) + scale_color_viridis_d(begin = 0.1, end = 0.9) +
+    facet_wrap(~round, ncol = 2) + labs(y = "Stress response", x = "Day sample was taken") +
+    theme_classic(base_size = 30) + scale_x_continuous(breaks = c(3, 7, 14, 21, 28),
+    labels = c(3, 7, 14, 21, 28)) + theme(legend.position = c(0.8, 0.25))
 
+# stress_l <- lapply(unique(stress$Bird.ID), function(x){ X <-
+# stress[stress$Bird.ID == x, ] X$cort.baseline.change <- X$cort.baseline - X$
+# })
+
+standard_error <- function(x) sd(x)/sqrt(length(x))
+
+agg_stress <- aggregate(cort.baseline ~ week + treatment, stress, mean)
+agg_stress$se <- aggregate(cort.baseline ~ week + treatment, stress, standard_error)[,
+    3]
+agg_stress$Week <- 1:4
+
+ggplot(data = agg_stress, aes(x = Week, y = cort.baseline, fill = treatment)) + geom_bar(stat = "identity") +
+    geom_errorbar(aes(ymin = cort.baseline - se, ymax = cort.baseline + se), width = 0.1) +
+    # geom_line(size = 1.2) +
+scale_fill_viridis_d(begin = 0.1, end = 0.9) + facet_wrap(~treatment, ncol = 3, scale = "fixed") +
+    labs(y = "Baseline CORT", x = "Week") + theme_classic(base_size = 30) + 
+theme(legend.position = "none")
+```
+
+## FOXP2
+```{r, eval = TRUE}
+
+foxp2 <- read.csv("./data/raw/stress_IHC_counts.csv")
+
+foxp2$Treatment[grep("HIGH", foxp2$Treatment)] <- "High stress"
+foxp2$Treatment[grep("Control", foxp2$Treatment, ignore.case = T)] <- "Control"
+foxp2$Treatment[grep("MED", foxp2$Treatment)] <- "Medium stress"
+
+foxp2$Treatment <- factor(foxp2$Treatment, levels = c("Control", "Medium stress",
+    "High stress"))
+
+ggplot(data = foxp2, aes(x = Treatment, y = FoxP2.Counts.MMSt.Striatum, fill = Treatment)) +
+    geom_boxplot() + geom_point() + 
+scale_fill_viridis_d(begin = 0.1, end = 0.9) + 
+labs(y = "% FoxP2 expression", x = "Treatment") + theme_classic(base_size = 30) +
+    # scale_x_discrete( labels = c(1:4)) +
+theme(legend.position = "none")
 ```
 
 
@@ -554,13 +646,13 @@ tab <- table(sels$ID)
 
 Y <- sels[sels$ID %in% names(tab[tab > 20]), ]
 
-pca_areas <- acoustic_space_area(X = Y, dimensions = c("PC1", "PC2"), group = "ID", cl = 4, pb = TRUE, distance.matrix = FALSE, rarefaction = TRUE, iteracions = 200, type = "mcp")
+pca_areas <- rarefact_space_size(X = Y, dimensions = c("PC1", "PC2"), group = "ID", parallel = 4, pb = TRUE,type = "mcp")
 
-rf_mds_areas <- acoustic_space_area(X = Y, dimensions = c("MDS1", "MDS2"), group = "ID", cl = 4, pb = TRUE, distance.matrix = FALSE, rarefaction = TRUE, iteracions = 200, type = "mcp")
+rf_mds_areas <- rarefact_space_size(X = Y, dimensions = c("MDS1", "MDS2"), group = "ID", parallel = 4, pb = TRUE, type = "mcp")
 
-tsne_areas <- acoustic_space_area((X = Y, dimensions = c("TSNE1", "TSNE2"), group = "ID", cl = 4, pb = TRUE, distance.matrix = FALSE, rarefaction = TRUE, iteracions = 200, type = "mcp")
+tsne_areas <- rarefact_space_size(X = Y, dimensions = c("TSNE1", "TSNE2"), group = "ID", parallel = 4, pb = TRUE, type = "mcp")
 
-areas <- data.frame(pca_areas[,-ncol(pca_areas)], pca.area = pca_areas$area, rf.mds.area = rf_mds_areas$area, tsne.area = tsne_areas$area)
+areas <- data.frame(pca_areas[,-ncol(pca_areas)], pca.area = pca_areas$mean.size, rf.mds.area = rf_mds_areas$mean.size, tsne.area = tsne_areas$mean.size)
 
 saveRDS(areas, "./data/processed/acoustic_space_area_by_individual_for_each_dimension_reduction_method.RDS")
 
@@ -570,7 +662,7 @@ saveRDS(areas, "./data/processed/acoustic_space_area_by_individual_for_each_dime
 
 areas <- readRDS("./data/processed/acoustic_space_area_by_individual_for_each_dimension_reduction_method.RDS")
 
-ggpairs(flea, columns = which(names(areas) %in% c("pca.area", "rf.mds.area", "tsne.area")), columnLabels = c("PCA", "Rand.for. MDS", "t-SNE")) +
+ggpairs(areas, columns = which(names(areas) %in% c("pca.area", "rf.mds.area", "tsne.area")), columnLabels = c("PCA", "Rand.for. MDS", "t-SNE")) +
   theme_minimal(base_size = 30)
 
 ```
@@ -590,12 +682,12 @@ tab <- table(sels$ID.week)
 Y <- sels[sels$ID.week %in% names(tab)[tab >= 6], ]
 
 # run with rarefaction
-areas_by_week_raref <- acoustic_space_area(X = Y, dimensions = c("PC1", "PC2"), group = "ID.week", cl = 4, pb = TRUE, distance.matrix = FALSE, rarefaction = TRUE, iteracions = 200, type = "kernel")
+areas_by_week_raref <- rarefact_space_size(X = Y, dimensions = c("PC1", "PC2"), group = "ID.week", parallel = 4, pb = TRUE, type = "mcp")
 
 # run without rarefaction
-areas_by_week <- acoustic_space_area(X = Y, dimensions = c("PC1", "PC2"), group = "ID.week", cl = 4, pb = TRUE, distance.matrix = FALSE, rarefaction = FALSE, iteracions = 200, type = "mcp")
+areas_by_week <- space_size(X = Y, dimensions = c("PC1", "PC2"), group = "ID.week", cl = 4, pb = TRUE, type = "mcp")
 
-areas_by_week$raref.area <- areas_by_week_raref$area
+areas_by_week$raref.area <- areas_by_week_raref$mean.size
                                      
 # add metadata
 areas_by_week$ID <- sapply(strsplit(areas_by_week$group, "-"), "[[", 1)
@@ -665,7 +757,7 @@ Without rarefaction
 
 ```{r plot acoustic space by individual week, eval = TRUE, fig.width= 7, fig.height= 6}
 
-ggplot(data = areas_by_week[areas_by_week$week != 5, ], aes(x = week, y = area, group = ID, col = treatment)) +
+ggplot(data = areas_by_week[areas_by_week$week != 5, ], aes(x = week, y = size, group = ID, col = treatment)) +
     geom_point() +
     geom_line(size = 1.2) +
     scale_color_viridis_d(begin = 0.1, end = 0.9) +
@@ -683,11 +775,11 @@ Without rarefaction and compared to week 1
 areas_by_week <- do.call(rbind, lapply(unique(areas_by_week$ID), function(x){
   
   X <- areas_by_week[areas_by_week$ID == x, ]
-  X$area <- X$area - X$area[X$week == min(as.numeric(as.character(X$week)))]
+  X$size <- X$size - X$size[X$week == min(as.numeric(as.character(X$week)))]
   return(X)
 }))
 
-ggplot(data = areas_by_week, aes(x = week, y = area, group = ID, col = treatment)) +
+ggplot(data = areas_by_week, aes(x = week, y = size, group = ID, col = treatment)) +
     geom_point() +
     geom_line(size = 1.2) +
     scale_color_viridis_d(begin = 0.1, end = 0.9) +
@@ -702,7 +794,7 @@ ggplot(data = areas_by_week, aes(x = week, y = area, group = ID, col = treatment
 Acoustic space area by number of calls per individual and week
 ```{r acoustic space by n, eval = TRUE, fig.width= 7, fig.height= 6}
 
-ggplot(data = areas_by_week, aes(x = n, y = area, col = treatment)) +
+ggplot(data = areas_by_week, aes(x = n, y = size, col = treatment)) +
     geom_point() +
     # geom_smooth(size = 1.2, method = "lm") +
     scale_color_viridis_d(begin = 0.1, end = 0.9) +
@@ -718,7 +810,7 @@ ggplot(data = areas_by_week, aes(x = n, y = area, col = treatment)) +
 
 ```{r acoustic space by n and week, eval = TRUE, fig.width= 7, fig.height= 6}
 
-ggplot(data = areas_by_week, aes(x = n, y = log(area + 10), col = treatment)) +
+ggplot(data = areas_by_week, aes(x = n, y = log(size + 10), col = treatment)) +
     geom_point() +
     geom_smooth(size = 1.2, method = "lm") +
     scale_color_viridis_d(begin = 0.1, end = 0.9) +
@@ -737,9 +829,9 @@ tab <- table(sels$ID)
 Y <- sels[sels$ID %in% names(tab)[tab >= 2], ]
 
 # run with density
-dens_overlap_by_id <- acoustic_space_overlap(X = Y, dimensions = c("PC1", "PC2"), group = "ID", cl = 10, pb = TRUE, distance.matrix = FALSE, outliers = 0.95) 
+dens_overlap_by_id <- space_similarity(X = Y, dimensions = c("PC1", "PC2"), group = "ID", parallel = 10, pb = TRUE, outliers = 0.95, type = "mean.density.overlap") 
 
-dist_overlap_by_id <- acoustic_space_overlap(X = Y, dimensions = c("PC1", "PC2"), group = "ID", cl = 10, pb = TRUE, distance.matrix = FALSE, outliers = 0.95, type = "distance")
+dist_overlap_by_id <- space_similarity(X = Y, dimensions = c("PC1", "PC2"), group = "ID", parallel = 10, pb = TRUE, outliers = 0.95, type = "distance")
 
 saveRDS(list(dens_overlap_by_id = dens_overlap_by_id, dist_overlap_by_id = dist_overlap_by_id), "./data/processed/acoustic_space_overlap_by_individual_2_metrics.RDS")
 ```
@@ -749,7 +841,7 @@ Mantel test between the 2 methods
 
 attach(readRDS("./data/processed/acoustic_space_overlap_by_individual_2_metrics.RDS"))
 
-mantel.rtest(as.dist(1-dens_overlap_by_id), as.dist(dist_overlap_by_id), nrepet = 10000)
+mantel.rtest(as.dist(1-rectangular_to_triangular(dens_overlap_by_id, distance = FALSE)), as.dist(rectangular_to_triangular(dist_overlap_by_id)), nrepet = 10000)
 ```
 
 
@@ -770,13 +862,13 @@ group_ovlp_l <- lapply(unique(Y$ID.week), function(x){
   X$ID2 <- ifelse(X$ID.week == x, "focal", "group")
   
 # run with density
-  ovlp <- if (min(table(X$ID2)) > 2)
-  acoustic_space_overlap(X = X, dimensions = c("PC1", "PC2"), group = "ID2", cl = 10, pb = FALSE, distance.matrix = FALSE, outliers = 0.95, mean.overlap = FALSE) 
-  else matrix(rep(NA, 4), nrow = 2)
+  ovlp <- if (min(table(X$ID2)) > 4)
+  space_similarity(X = X, dimensions = c("PC1", "PC2"), group = "ID2", parallel = 10, pb = FALSE, outliers = 0.95, type = "mean.mcp.overlap") else matrix(rep(NA, 3), nrow = 1)
   
-  dsts <- if (min(table(X$ID2)) > 2) acoustic_space_overlap(X = X, dimensions = c("PC1", "PC2"), group = "ID2", cl = 10, pb = FALSE, distance.matrix = FALSE, outliers = 0.95, mean.overlap = FALSE, type = "distance")  else matrix(rep(NA, 4), nrow = 2)
+  dsts <- if (min(table(X$ID2)) > 1) 
+    space_similarity(X = X, dimensions = c("PC1", "PC2"), group = "ID2", parallel = 10, pb = FALSE, outliers = 0.95, type = "distance") else matrix(rep(NA, 3), nrow = 1)
 
-  out <- data.frame(ID = Y$ID[Y$ID.week == x][1], group = Y$record.group[Y$ID.week == x][1], week = Y$week[Y$ID.week == x][1], overlap.to.group = ovlp[1, 2],  distance.to.group = dsts[1, 2], treatment = Y$treatment[Y$ID.week == x][1], round = Y$round[Y$ID.week == x][1])
+  out <- data.frame(ID = Y$ID[Y$ID.week == x][1], group = Y$record.group[Y$ID.week == x][1], week = Y$week[Y$ID.week == x][1], overlap.to.group = ovlp[1, 3],  distance.to.group = dsts[1, 3], treatment = Y$treatment[Y$ID.week == x][1], round = Y$round[Y$ID.week == x][1])
   
   return(out)
   
@@ -828,6 +920,7 @@ ggplot(data = group_ovlp, aes(x = week, y = overlap.to.group, group = ID, col = 
 
 
 ```{r test treament on acoustic space overlap by id, eval = FALSE}
+
 # Partial mantel test between acoustic space
 sels$ID.week <- paste(sels$ID, sels$week, sep = "-")
 
@@ -835,11 +928,11 @@ tab <- table(sels$ID.week)
 
 Y <- sels[sels$ID.week %in% names(tab)[tab >= 2], ]
 
-treatment_labs <- sapply(rownames(dens_overlap_by_id), function(x) Y$treatment[Y$ID == x][1])
+treatment_labs <- sapply(unique(c(dens_overlap_by_id$group.1, dens_overlap_by_id$group.2)), function(x) Y$treatment[Y$ID == x][1])
 
 treatment_mat <- binary_matrix(labels = treatment_labs)
 
-round_labs <- sapply(rownames(dens_overlap_by_id), function(x) Y$round[Y$ID == x][1])
+round_labs <- sapply(unique(c(dens_overlap_by_id$group.1, dens_overlap_by_id$group.2)), function(x) Y$round[Y$ID == x][1])
 
 round_mat <- binary_matrix(labels = round_labs)
 
@@ -855,12 +948,188 @@ sels$ID.week <- paste(sels$ID, sels$week, sep = "-")
 
 tab <- table(sels$ID.week)
 
-Y <- sels[sels$ID.week %in% names(tab)[tab >= 2], ]
+Y <- sels[sels$ID.week %in% names(tab)[tab >= 5], ]
 
 # run with rarefaction
-overlap_by_week <- acoustic_space_overlap(X = Y, dimensions = c("PC1", "PC2"), group = "ID.week", cl = 10, pb = TRUE, distance.matrix = FALSE, outliers = 0.95) 
+overlap_by_week <- space_similarity(X = Y, dimensions = c("PC1", "PC2"), group = "ID.week", parallel = 1, pb = TRUE, outliers = 0.95, type = "mean.mcp.overlap") 
 
 saveRDS(overlap_by_week, "./data/processed/acoustic_space_overlap_by_individual_and_week.RDS")
+```
+
+```{r, eval = FALSE}
+
+
+trait_space_plot(X = sels, indices = which(sels$ID == "395WBHM"), dimensions = c("TSNE1", "TSNE2"), point.alpha = 0.2, pch = 1)
+# 
+trait_space_plot(X = sels, indices = which(sels$ID == "395WBHM"), dimensions = c("TSNE1", "TSNE2"), background.indices = which(sels$ID != "395WBHM" & sels$record.group == sels$record.group[sels$ID == "395WBHM"][1]),  point.alpha = 0.2, pch = 1)
+```
+
+
+```{r create gifs of acoustic space change over time, eval = FALSE}
+
+# Y <- sels[sels$ID == "395WBHM",]
+# Y <- sels[sels$ID %in% c("395WBHM", "394WBHM", "360YGHM", "385YBHM"), ]
+
+# trait_overlap(Y, dimensions = c("TSNE1", "TSNE2"), group = "ID", type = "density", overlap.type = "assymetric")
+
+
+# X = Y
+# dimensions = c("TSNE1", "TSNE2")
+# level <- "395WBHM"
+# basecex <- 1
+# group <- "ID"
+# indices <- which(X[, group] == level)
+
+trait_space_plot(X = sels, indices = which(sels$ID == "395WBHM"), dimensions = c("TSNE1", "TSNE2"), background.indices = which(sels$ID != "395WBHM" & sels$record.group == sels$record.group[sels$ID == "395WBHM"][1]),  point.alpha = 0.2, pch = 1)
+
+# with points
+out <- pblapply(unique(sels$ID), function(x){
+ 
+  tiff(filename = file.path("./images", paste(x, sels$treatment[sels$ID == x][1], "v2.tiff", sep = "-")), res = 120, width = 800, height = 800)
+
+   par(mfrow = c(2, 2))
+
+   # W <- sels[sels$ID == x, ]
+   
+  for(i in 1:4)
+    try(trait_space_plot(X = sels, dimensions = c("TSNE1", "TSNE2"), indices = which(sels$ID == x & sels$week == i), background.indices = which(sels$ID != x & sels$week == i & sels$record.group == sels$record.group[sels$ID == x][1]), title = paste(x, "week", i), basecex = 1, labels = c(x, "group"), legend = FALSE), silent = TRUE)
+  
+    dev.off()
+  })
+
+
+```
+
+```{r, eval = FALSE}
+agg_dat <- aggregate(selec ~ ID + week, data = sels, length)
+
+# compare to week 1 agg_dat$call.count <- sapply(1:nrow(agg_dat), function(x) {
+# baseline <- agg_dat$selec[agg_dat$week == 1 & agg_dat$ID == agg_dat$ID[x]] if
+# (length(baseline) > 0) change <- agg_dat$selec[x] - baseline else change <-
+# agg_dat$selec[x] return(change) } )
+
+# without comparing to week 1
+agg_dat$call.count <- sapply(1:nrow(agg_dat), function(x) agg_dat$selec[x])
+
+agg_dat$selec <- NULL
+
+agg_dat$baseline.CORT <- sapply(1:nrow(agg_dat), function(x) {
+
+    baseline <- sels$cort.baseline[sels$week == 1 & sels$ID == agg_dat$ID[x]]
+    current <- sels$cort.baseline[sels$week == agg_dat$week[x] & sels$ID == agg_dat$ID[x]]
+
+    if (length(baseline) > 0 & length(current) > 0)
+        change <- mean(current) - mean(baseline) else change <- NA
+
+    return(change)
+})
+
+agg_dat$stress.response <- sapply(1:nrow(agg_dat), function(x) {
+
+    baseline <- sels$stress.response[sels$week == 1 & sels$ID == agg_dat$ID[x]]
+    current <- sels$stress.response[sels$week == agg_dat$week[x] & sels$ID == agg_dat$ID[x]]
+
+    if (length(baseline) > 0 & length(current) > 0)
+        change <- mean(current) - mean(baseline) else change <- NA
+
+    return(change)
+})
+
+
+agg_dat$stress.CORT <- sapply(1:nrow(agg_dat), function(x) {
+
+    baseline <- sels$cort.stress[sels$week == 1 & sels$ID == agg_dat$ID[x]]
+    current <- sels$cort.stress[sels$week == agg_dat$week[x] & sels$ID == agg_dat$ID[x]]
+
+    if (length(baseline) > 0 & length(current) > 0)
+        change <- mean(current) - mean(baseline) else change <- NA
+
+    return(change)
+})
+
+agg_dat$weight <- sapply(1:nrow(agg_dat), function(x) {
+
+    baseline <- sels$weight[sels$week == 1 & sels$ID == agg_dat$ID[x]]
+    current <- sels$weight[sels$week == agg_dat$week[x] & sels$ID == agg_dat$ID[x]]
+
+    if (length(baseline) > 0 & length(current) > 0)
+        change <- mean(current) - mean(baseline) else change <- NA
+
+    return(change)
+})
+
+agg_dat$breath.rate <- sapply(1:nrow(agg_dat), function(x) {
+
+    baseline <- sels$breath.count[sels$week == 1 & sels$ID == agg_dat$ID[x]]
+    current <- sels$breath.count[sels$week == agg_dat$week[x] & sels$ID == agg_dat$ID[x]]
+
+    if (length(baseline) > 0 & length(current) > 0)
+        change <- mean(current) - mean(baseline) else change <- NA
+
+    return(change)
+})
+
+agg_dat$acoustic.area <- sapply(1:nrow(agg_dat), function(x) {
+
+    area <- areas_by_week$area[areas_by_week$ID == agg_dat$ID[x] & areas_by_week$week ==
+        agg_dat$week[x]]
+
+    if (length(area) < 1)
+        area <- NA
+
+    return(area)
+})
+
+
+agg_dat$acoustic.distance <- sapply(1:nrow(agg_dat), function(x) {
+
+    distance <- indiv_ovlp$distance.to.first.week[indiv_ovlp$ID == agg_dat$ID[x] &
+        indiv_ovlp$week == agg_dat$week[x]]
+
+    if (length(distance) < 1)
+        distance <- NA
+
+    return(distance)
+})
+
+agg_dat$acoustic.overlap <- sapply(1:nrow(agg_dat), function(x) {
+
+    overlap <- indiv_ovlp$overlap.to.first.week[indiv_ovlp$ID == agg_dat$ID[x] &
+        indiv_ovlp$week == agg_dat$week[x]]
+
+    if (length(overlap) < 1)
+        overlap <- NA
+
+    return(overlap)
+})
+
+agg_dat$acoustic.overlap.to.group <- sapply(1:nrow(agg_dat), function(x) {
+
+    overlap <- group_ovlp$overlap.to.group[group_ovlp$ID == agg_dat$ID[x] & group_ovlp$week ==
+        agg_dat$week[x]]
+
+    if (length(overlap) < 1)
+        overlap <- NA
+
+    return(overlap)
+})
+
+
+agg_dat$treatment <- sapply(1:nrow(agg_dat), function(x) unique(sels$treatment[sels$ID ==
+    agg_dat$ID[x]]))
+
+agg_dat$round <- sapply(1:nrow(agg_dat), function(x) unique(sels$round[sels$ID ==
+    agg_dat$ID[x]]))
+
+# remove week 1
+agg_dat <- agg_dat[agg_dat$week != 1, ]
+
+
+responses <- setdiff(names(agg_dat), c("ID", "week", "treatment", "round"))
+
+predictors <- c("~ treatment + week + (1|ID)", "~ treatment * week + (1|ID)", "~ round + week + (1|ID)")
+
+formulas <- expand.grid(responses = responses, predictors = predictors, stringsAsFactors = FALSE)
 ```
 
 
