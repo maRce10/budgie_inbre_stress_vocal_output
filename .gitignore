@@ -7,5 +7,5 @@ data/processed/physiological_response_models.RDS
 data/processed/stress_on_learning_models.RDS
 data/processed/stress_on_learning_models_week_2.RDS
 data/processed/stress_on_learning_models_week_3.RDS
-data/processed/treatment_models_week_factor.RDS
 data/processed/treatment_models.RDS
+data/processed/treatment_models_week_factor.RDS

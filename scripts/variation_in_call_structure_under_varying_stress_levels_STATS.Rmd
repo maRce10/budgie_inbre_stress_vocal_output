@@ -1,14 +1,13 @@
 ---
-title: Variation in vocal behavior under varying stress levels
-ubtitle: Budgie INBRE stress and contact calls
-author: <a href="http://marceloarayasalas.weebly.com/">Marcelo Araya-Salas, PhD</a> & <a href="https://wrightbehaviorlab.org/">Timothy Wright, PhD</a>
-date: "`r Sys.Date()`"
+title: <center><font size="6"><b>Variation in vocal behavior under varying stress levels</b></font></center>
+subtitle: <center><font size="4"><b>Budgie INBRE stress and contact calls</b></font></center>
+author: <center><font size="4"><a href="http://marceloarayasalas.weebly.com/">Marcelo Araya-Salas, PhD</a> & <a href="https://wrightbehaviorlab.org/">Timothy Wright, PhD</a></font></center>
+date: <center>`r format(Sys.Date(), "%d-%m-%Y")`</center>
 output:
   html_document:
     code_folding: hide
     toc: yes
     toc_depth: 3
-    css: rmd.css
     df_print: kable
     toc_float:
       collapsed: yes
@@ -17,54 +16,6 @@ fontsize: 12pt
 editor_options: 
   chunk_output_type: console
 ---
-<style>
-body
-  { counter-reset: source-line 0; }
-pre.numberSource code
-  { counter-reset: none; }
-</style>
-
-
-```{r, echo = FALSE}
-# set working directory as project directory or one directory above,
-rootdir <- try(rprojroot::find_rstudio_root_file(), silent = TRUE)
-if (is(rootdir, "try-error")) rootdir <-  ".."
-knitr::opts_knit$set(root.dir = rootdir)
-```
-
-```{r add link to github repo, echo = FALSE, results='asis'}
-
-# print link to github repo if any
-if (file.exists("./.git/config")){
-  config <- readLines("./.git/config")
-  url <- grep("url",  config, value = TRUE)
-  url <- gsub("\\turl = |.git$", "", url)
-  cat("\nSource code and data found at [", url, "](", url, ")", sep = "")
-  }
-
-```
-
-```{r setup style, echo = FALSE, message = FALSE, warning=FALSE}
-
-# options to customize chunk outputs
-knitr::opts_chunk$set(
-  class.source = "numberLines lineAnchors", # for code line numbers
-  tidy.opts = list(width.cutoff = 65), 
-  tidy = TRUE,
-  message = FALSE
- )
-
-# to add copy button to code blocks
-htmltools::tagList(
-  xaringanExtra::use_clipboard(
-    button_text = "<i class=\"fa fa-clipboard\"></i>",
-    success_text = "<i class=\"fa fa-check\" style=\"color: #90BE6D\"></i>",
-    error_text = "<i class=\"fa fa-times-circle\" style=\"color: #F94144\"></i>"
-  ),
-  rmarkdown::html_dependency_font_awesome()
-)
-
-```
 
 ## Load packages
 ```{r packages, message = FALSE, warning = FALSE, echo = TRUE, eval = TRUE}
@@ -72,12 +23,25 @@ htmltools::tagList(
 ## add 'developer' to packages to be installed from github
 x <- c("remotes", "lubridate", "readxl", "pbapply", "viridis", "ggplot2", "kableExtra", "knitr", "formatR", "MASS", "sp", "GGally", "brms", "lme4", "dplyr", "purrr", "forcats", "tidyr", "modelr", "tidybayes", "cowplot", "ggrepel", "posterior", "ggridges", "maRce10/PhenotypeSpace")
 
-source("~/Dropbox/R_package_testing/sketchy/R/load_packages.R")
-load_packages(x)
 
-source("~/Dropbox/R_package_testing/brmsish/R/html_summary.R")
-source("~/Dropbox/R_package_testing/brmsish/R/helpers.R")
-source("~/Dropbox/R_package_testing/brmsish/R/read_summary.R")
+aa <- lapply(x, function(y) {
+  
+  # get pakage name
+  pkg <- strsplit(y, "/")[[1]]
+  pkg <- pkg[length(pkg)]
+  
+  # check if installed, if not then install 
+  if (!pkg %in% installed.packages()[,"Package"])  {
+
+      if (grepl("/", y))  remotes::install_github(y, force = TRUE) else
+    install.packages(y) 
+    }
+
+  # load package
+  a <- try(require(pkg, character.only = T), silent = T)
+
+  if (!a) remove.packages(pkg)
+  })
 
 ```
 
@@ -391,13 +355,13 @@ agg_dat$baseline.CORT <- sapply(1:nrow(agg_dat), function(x) {
 
 agg_dat$stress.response <- sapply(1:nrow(agg_dat), function(x) {
 
-    # baseline <- sels$stress.response[sels$week == 1 & sels$ID == agg_dat$ID[x]]
+    baseline <- sels$stress.response[sels$week == 1 & sels$ID == agg_dat$ID[x]]
     current <- sels$stress.response[sels$week == agg_dat$week[x] & sels$ID == agg_dat$ID[x]]
 
-    # if (length(baseline) > 0 & length(current) > 0)
-        # change <- mean(current) - mean(baseline) else change <- NA
+    if (length(baseline) > 0 & length(current) > 0)
+        change <- mean(current) - mean(baseline) else change <- NA
 
-    return(mean(current))
+    return(change)
 })
 
 
@@ -531,7 +495,7 @@ stress_l <- lapply(stress$Bird.ID, function(x) {
     X$weight <- X$weight - X$weight[X$week == "D3"]
     X$cort.stress <- X$cort.stress - X$cort.stress[X$week == "D3"]
     X$cort.baseline <- X$cort.baseline - X$cort.baseline[X$week == "D3"]
-    X$stress.response <- X$stress.response #- X$stress.response[X$week == "D3"]
+    X$stress.response <- X$stress.response - X$stress.response[X$week == "D3"]
 
     return(X)
 })
@@ -583,16 +547,11 @@ gg_stress.response <- ggplot(data = agg_stress, aes(x = Week, y = stress.respons
     geom_errorbar(aes(ymin = stress.response - stress.response.se, ymax = stress.response + stress.response.se), width = 0.1) +
     scale_fill_viridis_d(begin = 0.1, end = 0.9) + 
     facet_wrap(~treatment, ncol = 3, scale = "fixed") +
-    labs(y = "Stress response \nCORT (ng/mL)", x = "Week") +
+    labs(y = "Mean change in stress\nresponse CORT (ng/mL)", x = "Week") +
     theme_classic(base_size = bs) + 
     theme(legend.position = "none")
 
 cowplot::plot_grid(gg_breath.count, gg_weight, gg_cort.baseline, gg_stress.response)
-
-
-# cowplot::ggsave2(filename = "./output/physiological_parameters_tru_time_70dpi.jpeg")
-# 
-# cowplot::ggsave2(filename = "./output/physiological_parameters_tru_time_300dpi.jpeg", dpi = 300)
 
 ```
 
@@ -642,9 +601,8 @@ physio_models <- readRDS("./data/processed/physiological_response_models.RDS")
 
 ggl <- list()
 for (x in 1:length(physio_models)) {
-
-    ggl[[length(ggl) + 1]] <- html_summary(physio_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE, model.name = names(physio_models)[x])
-    print(ggl[[length(ggl)]])
+  cat(paste("-  ", names(physio_models)[x], "\n"))
+    ggl[[length(ggl) + 1]] <- summary_brm_model(physio_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "")
   }
 
 names(ggl) <- names(physio_models)
@@ -744,7 +702,7 @@ gg_call.count <- ggplot(data = agg_behav, aes(x = week, y = call.count, fill = t
     geom_errorbar(aes(ymin = call.count - call.count.se, ymax = call.count + call.count.se), width = 0.1) +
 scale_fill_viridis_d(begin = 0.1, end = 0.9) + 
     facet_wrap(~treatment, ncol = 3, scale = "fixed") +
-    labs(y = "Vocal output", x = "Week") + 
+    labs(y = "Vocal output (number of calls)", x = "Week") + 
     theme_classic(base_size = bs) + 
     theme(legend.position = "none")
 
@@ -753,7 +711,7 @@ gg_acoustic.area <- ggplot(data = agg_behav, aes(x = week, y = acoustic.area, fi
     geom_errorbar(aes(ymin = acoustic.area - acoustic.area.se, ymax = acoustic.area + acoustic.area.se), width = 0.1) +
     scale_fill_viridis_d(begin = 0.1, end = 0.9) + 
     facet_wrap(~treatment, ncol = 3, scale = "fixed") +
-    labs(y = "Change in vocal diversity", x = "Week") + 
+    labs(y = "Mean change in \n acoustic area", x = "Week") + 
     theme_classic(base_size = bs) + 
     theme(legend.position = "none")
 
@@ -762,7 +720,7 @@ gg_acoustic.overlap <- ggplot(data = agg_behav, aes(x = week, y = acoustic.overl
     geom_errorbar(aes(ymin = acoustic.overlap - acoustic.overlap.se, ymax = acoustic.overlap + acoustic.overlap.se), width = 0.1) +
     scale_fill_viridis_d(begin = 0.1, end = 0.9) + 
     facet_wrap(~treatment, ncol = 3, scale = "fixed") +
-    labs(y = "Vocal Plasticity", x = "Week") + 
+    labs(y = "Acoustic overlap to self in week 1", x = "Week") + 
     theme_classic(base_size = bs) + 
     theme(legend.position = "none")
 
@@ -771,15 +729,11 @@ gg_acoustic.overlap.group <- ggplot(data = agg_behav, aes(x = week, y = acoustic
     geom_errorbar(aes(ymin = acoustic.overlap.to.group - acoustic.overlap.to.group.se, ymax = acoustic.overlap.to.group + acoustic.overlap.to.group.se), width = 0.1) +
     scale_fill_viridis_d(begin = 0.1, end = 0.9) + 
     facet_wrap(~treatment, ncol = 3, scale = "fixed") +
-    labs(y = "Vocal convergence", x = "Week") + 
+    labs(y = "Acoustic overlap to group", x = "Week") + 
     theme_classic(base_size = bs) + 
     theme(legend.position = "none")
 
 cowplot::plot_grid(gg_call.count, gg_acoustic.area, gg_acoustic.overlap, gg_acoustic.overlap.group)
-
-# cowplot::ggsave2(filename = "./output/vocal_parameters_tru_time_70dpi.jpeg")
-# 
-# cowplot::ggsave2(filename = "./output/vocal_parameters_tru_time_300dpi.jpeg", dpi = 300)
 
 ```
 
@@ -813,11 +767,9 @@ behav_models <- lapply(1:nrow(formulas), function(x) {
     if (!grepl("count|group", formulas$responses[x]))
         sub_dat <- sub_dat[sub_dat$week != 1, ] 
 
-    mod <- brm(formula = paste(formulas$responses[x], formulas$predictors[x]),
-        iter = 50000, silent = 2, data = sub_dat, control = list(adapt_delta = 0.9, max_treedepth = 15),
-        chains = 4, prior = c(prior(normal(0, 5), "b"), prior(normal(0, 10), "Intercept"),
-    prior(student_t(3, 0, 10), "sd"), prior(student_t(3, 0, 10), "sigma"))
-)
+    mod <- try(brm(formula = paste(formulas$responses[x], formulas$predictors[x]),
+        iter = 50000, silent = 2, data = sub_dat, control = list(adapt_delta = 0.9),
+        chains = 4), silent = TRUE)
 
         return(mod)
 })
@@ -836,8 +788,8 @@ behav_models <- readRDS("./data/processed/behavioral_response_models.RDS")
 ggl <- list()
 for (x in 1:length(behav_models)) {
   
-    ggl[[length(ggl) + 1]] <- html_summary(behav_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE, model.name = names(behav_models)[x])
-    print( ggl[[length(ggl)]])
+    cat(paste("-  ", names(behav_models)[x], "\n&nbsp;\n---\n&nbsp;"))
+    ggl[[length(ggl) + 1]] <- summary_brm_model(behav_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "")
     }
 
 names(ggl) <- names(behav_models)
@@ -848,72 +800,19 @@ names(ggl) <- names(behav_models)
 
 
 Barplot and effect sizes side-by-side
-```{r, fig.height = 3, eval = TRUE, out.width="120%", out.height="200%"}
+```{r, fig.height = 3, eval = TRUE}
 
-col_pointrange <- viridis(10)[2] 
-    
-gg_coeffs <- lapply(behav_models, function(x){
-    
-    vars <- grep("b_", posterior::variables(x), value = TRUE)
-    draws <- posterior::as_draws_array(x, variable = vars)
+cowplot::plot_grid(gg_call.count + theme_classic(base_size = 10) + 
+    theme(legend.position = "none"), ggl[[grep("count", names(ggl))]])
 
-    coef_table <- draw_summary(draws, variables = vars, probs = c(0.025, 0.975), robust = TRUE)
-    
-    coef_table$predictor <- rownames(coef_table)
-    coef_table$predictor <- gsub("b_treatment|b_", "", coef_table$predictor)
-    coef_table$predictor <- gsub("Stress", " stress", coef_table$predictor)
-    coef_table$predictor <- gsub("week", "Week", coef_table$predictor)
-    coef_table <- coef_table[coef_table$predictor != "Intercept", ]
-    
-gg_coef <- ggplot2::ggplot(data = coef_table, aes(x = Estimate, y = predictor)) +
-    geom_vline(xintercept = 0, lty = 2) +
-    ggplot2::geom_point(size = 4, col = col_pointrange) +
-    ggplot2::geom_errorbar(ggplot2::aes(xmin = `l-95% CI`, xmax = `u-95% CI`),
-                             width = 0, col = col_pointrange) +
-      ggplot2::theme_classic(base_size = bs) +
-      ggplot2::theme(
-        axis.ticks.length = ggplot2::unit(0, "pt"),
-        plot.margin = ggplot2::margin(0, 0, 0, 0, "pt"),
-        legend.position = "none",
-        strip.background = ggplot2::element_blank(),
-        strip.text = ggplot2::element_blank()
-      ) +
-      ggplot2::labs(x = "Effect size", y = "")
+cowplot::plot_grid(gg_acoustic.area + theme_classic(base_size = 10) + 
+    theme(legend.position = "none"), ggl[[grep("area", names(ggl))]])
 
-      return(gg_coef)  
-})
+cowplot::plot_grid(gg_acoustic.overlap + theme_classic(base_size = 10) + 
+    theme(legend.position = "none"), ggl[[grep("overlap ~", names(ggl))]])
 
-# cowplot::plot_grid(gg_call.count + theme_classic(base_size = 20) + 
-#     theme(legend.position = "none"), gg_coeffs[[grep("count", names(gg_coeffs))]], nrow = 2)
-# 
-# cowplot::plot_grid(gg_acoustic.area + theme_classic(base_size = 20) + 
-#     theme(legend.position = "none"), gg_coeffs[[grep("area", names(gg_coeffs))]])
-# 
-# cowplot::plot_grid(gg_acoustic.overlap + theme_classic(base_size = 20) + 
-#     theme(legend.position = "none"), gg_coeffs[[grep("overlap ~", names(gg_coeffs))]])
-# 
-# cowplot::plot_grid(gg_acoustic.overlap.group + theme_classic(base_size = 10) + 
-#     theme(legend.position = "none"), gg_coeffs[[grep("group", names(gg_coeffs))]])
-bs <- 10
-cowplot::plot_grid(
-    gg_call.count + theme_classic(base_size = bs) + 
-    theme(legend.position = "none"),
-    gg_acoustic.area + theme_classic(base_size = bs) + 
-    theme(legend.position = "none"), 
-    gg_acoustic.overlap + theme_classic(base_size = bs) + 
-    theme(legend.position = "none"),
-    gg_acoustic.overlap.group + theme_classic(base_size = bs) + 
-    theme(legend.position = "none"), 
-    gg_coeffs[[grep("count", names(gg_coeffs))]] + theme_classic(base_size = bs), 
-    gg_coeffs[[grep("area", names(gg_coeffs))]] + theme_classic(base_size = bs),
-    gg_coeffs[[grep("overlap ~", names(gg_coeffs))]] + theme_classic(base_size = bs),
-    gg_coeffs[[grep("group", names(gg_coeffs))]] + theme_classic(base_size = bs), nrow = 2, rel_heights = c(1.8, 1))
-
-# try bs = 20 for saving plots
-
-# cowplot::ggsave2(filename = "./output/bar_graphs_and_estimates_70dpi.jpeg", width = 25, height = 9)
-# 
-# cowplot::ggsave2(filename = "./output/bar_graphs_and_estimates_300dpi.jpeg", dpi = 300, width = 25, height = 9)
+cowplot::plot_grid(gg_acoustic.overlap.group + theme_classic(base_size = 10) + 
+    theme(legend.position = "none"), ggl[[grep("group", names(ggl))]])
 
 ```
 
