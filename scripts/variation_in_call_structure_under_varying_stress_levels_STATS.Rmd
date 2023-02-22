@@ -486,7 +486,7 @@ stress_l <- lapply(stress$Bird.ID, function(x) {
     X$weight <- X$weight - X$weight[X$week == "D3"]
     X$cort.stress <- X$cort.stress - X$cort.stress[X$week == "D3"]
     X$cort.baseline <- X$cort.baseline - X$cort.baseline[X$week == "D3"]
-    X$stress.response <- X$stress.response #- X$stress.response[X$week == "D3"]
+    X$stress.response <- X$stress.response - X$stress.response[X$week == "D3"]
 
     return(X)
 })
@@ -639,14 +639,9 @@ saveRDS(physio_models, "./data/processed/physiological_response_models.RDS")
 
 physio_models <- readRDS("./data/processed/physiological_response_models.RDS")
 
-ggl <- list()
-for (x in 1:length(physio_models)) {
-
-    ggl[[length(ggl) + 1]] <- html_summary(physio_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE, model.name = names(physio_models)[x])
-    print(ggl[[length(ggl)]])
-  }
-
-names(ggl) <- names(physio_models)
+for (x in 1:length(physio_models)) 
+    html_summary(physio_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE, model.name = names(physio_models)[x])
+   
 ```
 
 &nbsp;
@@ -860,15 +855,10 @@ saveRDS(behav_models, "./data/processed/behavioral_response_models.RDS")
 
 behav_models <- readRDS("./data/processed/behavioral_response_models.RDS")
 
-ggl <- list()
-for (x in 1:length(behav_models)) {
-  
-    ggl[[length(ggl) + 1]] <- html_summary(behav_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE, model.name = names(behav_models)[x])
-    print( ggl[[length(ggl)]])
-    }
 
-names(ggl) <- names(behav_models)
-
+for (x in 1:length(behav_models)) 
+    html_summary(behav_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE, model.name = names(behav_models)[x])
+   
 ```
 
 &nbsp;
