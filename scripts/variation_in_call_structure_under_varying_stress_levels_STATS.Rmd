@@ -78,6 +78,7 @@ load_packages(x)
 source("~/Dropbox/R_package_testing/brmsish/R/html_summary.R")
 source("~/Dropbox/R_package_testing/brmsish/R/helpers.R")
 source("~/Dropbox/R_package_testing/brmsish/R/read_summary.R")
+source("~/Dropbox/R_package_testing/brmsish/R/check_rds_models.R")
 
 ```
 
@@ -878,6 +879,13 @@ for (x in 1:length(behav_models))
 &nbsp;
 
 
+# Combined model diagnostics
+
+```{r, eval = TRUE, results='asis'}
+
+check_rds_models(path = "./data/processed", html = TRUE, verbose = FALSE)
+
+```
 
 ---
 
