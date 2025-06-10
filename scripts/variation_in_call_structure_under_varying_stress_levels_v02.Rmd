@@ -1,5 +1,5 @@
 ---
-title: <center><font size="6"><b>Variation in vocal behavior under varying stress levels</b></font></center>
+title: <center><font size="6"><b>Variation in vocal behavior under varying stress levels V01</b></font></center>
 subtitle: <center><font size="4"><b>Budgie INBRE stress and contact calls</b></font></center>
 author: <center><font size="4"><a href="http://marceloarayasalas.weebly.com/">Marcelo Araya-Salas, PhD</a> & <a href="https://wrightbehaviorlab.org/">Timothy Wright, PhD</a></font></center>
 date: <center>`r format(Sys.Date(), "%d-%m-%Y")`</center>
@@ -21,7 +21,7 @@ editor_options:
 ```{r packages, message = FALSE, warning = FALSE, echo = TRUE, eval = TRUE}
 
 ## add 'developer' to packages to be installed from github
-x <- c("remotes", "lubridate", "readxl", "pbapply", "viridis", "ggplot2", "kableExtra", "knitr", "formatR", "randomForest", "Rtsne", "MASS", "adehabitatHR", "sp", "GGally", "spatstat", "raster", "vegan", "brms", "lme4", "dplyr", "purrr", "forcats", "tidyr", "modelr", "tidybayes", "cowplot", "ggrepel", "posterior", "ggridges", "maRce10/PhenotypeSpace")
+x <- c("remotes", "lubridate", "readxl", "pbapply", "viridis", "ggplot2", "kableExtra", "knitr", "formatR", "randomForest", "Rtsne", "MASS", "adehabitatHR", "sp", "GGally", "spatstat", "raster", "vegan", "brms", "lme4", "dplyr", "purrr", "forcats", "tidyr", "modelr", "tidybayes", "cowplot", "ggrepel", "posterior", "ggridges", "maRce10/PhenotypeSpace", "maRce10/brmsish")
 
 aa <- lapply(x, function(y) {
   
@@ -946,6 +946,7 @@ Without rarefaction and compared to week 1
 areas_by_week <- do.call(rbind, lapply(unique(areas_by_week$ID), function(x){
   
   X <- areas_by_week[areas_by_week$ID == x, ]
+  X$orig.area <- X$size
   X$size <- X$size - X$size[X$week == min(as.numeric(as.character(X$week)))]
   return(X)
 }))
@@ -1363,6 +1364,8 @@ indiv_ovlp$overlap.to.first.week[indiv_ovlp$overlap.to.first.week == 0] <- 1e-04
 indiv_ovlp$overlap.to.first.week[indiv_ovlp$overlap.to.first.week == 1] <- 0.9999
 ```
 
+
+
 week 2:
 ```{r, eval = FALSE}
 ## week 2
@@ -1659,6 +1662,35 @@ responses <- setdiff(names(agg_dat), c("ID", "week", "treatment", "round"))
 predictors <- c("~ treatment + week + (1|ID)", "~ treatment * week + (1|ID)", "~ round + week + (1|ID)")
 
 formulas <- expand.grid(responses = responses, predictors = predictors, stringsAsFactors = FALSE)
+
+
+agg_dat$foxp2 <- sapply(1:nrow(agg_dat), function(x) {
+  if (agg_dat$week[x] == 4)
+     fp2 <- foxp2$FoxP2.Counts.MMSt.Striatum[foxp2$Bird.ID == agg_dat$ID[x]][1] else fp2 <-NA
+     # print(length(fp2))
+    if (length(fp2) == 0) fp2 <- NA
+     return(fp2)
+}
+)
+sub_agg <- agg_dat[, c("baseline.CORT", "stress.CORT", "call.count", "acoustic.overlap", "acoustic.overlap.to.group", "weight", "breath.rate", "foxp2")]
+
+
+
+names(sub_agg) <- c("baseline\nCORT", "stress\nCORT", "vocal\noutput", "acoustic\noverlap\nto self", "acoustic\noverlap\nto group", "weight", "breath\nrate", "FOXP2")
+cm <- cor(sub_agg, use = "pairwise.complete.obs")
+
+corrplot.mixed(
+    cm,
+    upper = "ellipse",
+    lower = "number",
+    tl.col = "black",
+    tl.srt = 45,
+    number.cex = 0.7,
+    tl.cex = 0.7,
+    mar = c(1, 1, 1, 1)
+)
+
+
 ```
 
 ```{r, eval = FALSE}
@@ -1881,6 +1913,59 @@ for (x in treatment_models) {
 </div>
 
 &nbsp;
+
+## Individual models for each acoustic feature
+
+```{r}
+
+# spectrographic parameters
+responses <- c("duration", "meanfreq", "sd", "freq.median", "freq.IQR", "time.IQR", "skew",  "kurt", "sp.ent", "time.ent", "entropy", "meandom", "mindom", "maxdom", "dfrange",  "modindx", "meanpeakf")
+
+frmla <- as.formula(paste("cbind(", paste(responses, collapse = ", "), ") ~ ID + week + round + treatment"))
+
+agg_dat <- aggregate(x = frmla, data = sels, FUN = mean)
+
+predictors <- c("~ treatment + week + (1|ID) + (1|round)")
+
+formulas <- paste(responses, predictors)
+
+vars_to_scale <- c(responses, "week")
+
+# remove week 1
+sub_agg_dat <- agg_dat[agg_dat$week != 1, ]
+
+for (i in vars_to_scale) sub_agg_dat[, vars_to_scale] <- scale(sub_agg_dat[, vars_to_scale])
+
+acous_models <- lapply(1:length(formulas), function(x) {
+
+    sub_dat <- sub_agg_dat[!is.na(sub_agg_dat[names(sub_agg_dat) == responses[x]]),
+        ]
+    # sub_dat
+
+    mod <- brm(formula = formulas[x],
+        iter = 20000, silent = 2, data = sub_agg_dat, control = list(adapt_delta = 0.9),
+        chains = 4,
+        prior = c(prior(normal(0, 5), "b"), prior(normal(0, 10), "Intercept"),
+    prior(student_t(3, 0, 10), "sd"), prior(student_t(3, 0, 10), "sigma")),
+            file = paste0("./data/processed/", responses[x], "_model"),
+        file_refit = "on_change")
+
+    return(mod)
+})
+
+```
+
+```{r, results='asis'}
+
+# spectrographic parameters
+responses <- c("duration", "meanfreq", "sd", "freq.median", "freq.IQR", "time.IQR", "skew",  "kurt", "sp.ent", "time.ent", "entropy", "meandom", "mindom", "maxdom", "dfrange",  "modindx", "meanpeakf")
+
+
+for (x in responses) {
+  extended_summary(read.file = paste0("./data/processed/", x, "_model.rds"))
+}
+
+```
 
 ---
 

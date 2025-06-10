@@ -54,31 +54,36 @@ knitr::opts_chunk$set(
   message = FALSE
  )
 
-# to add copy button to code blocks
-htmltools::tagList(
-  xaringanExtra::use_clipboard(
-    button_text = "<i class=\"fa fa-clipboard\"></i>",
-    success_text = "<i class=\"fa fa-check\" style=\"color: #90BE6D\"></i>",
-    error_text = "<i class=\"fa fa-times-circle\" style=\"color: #F94144\"></i>"
-  ),
-  rmarkdown::html_dependency_font_awesome()
-)
-
 ```
 
 ## Load packages
 ```{r packages, message = FALSE, warning = FALSE, echo = TRUE, eval = TRUE}
 
 ## add 'developer' to packages to be installed from github
-x <- c("remotes", "lubridate", "readxl", "pbapply", "viridis", "ggplot2", "kableExtra", "knitr", "formatR", "MASS", "sp", "GGally", "brms", "lme4", "dplyr", "purrr", "forcats", "tidyr", "modelr", "tidybayes", "cowplot", "ggrepel", "posterior", "ggridges", "maRce10/PhenotypeSpace")
+x <- c("remotes", "lubridate", "readxl", "pbapply", "viridis", "ggplot2", "kableExtra", "knitr", "formatR", "MASS", "sp", "GGally", "brms", "lme4", "dplyr", "purrr", "forcats", "tidyr", "modelr", "tidybayes", "cowplot", "ggrepel", "posterior", "ggridges", "maRce10/PhenotypeSpace", "corrplot", "DT")
 
 source("~/Dropbox/R_package_testing/sketchy/R/load_packages.R")
 load_packages(x)
 
-source("~/Dropbox/R_package_testing/brmsish/R/html_summary.R")
+source("~/Dropbox/R_package_testing/brmsish/R/extended_summary.R")
 source("~/Dropbox/R_package_testing/brmsish/R/helpers.R")
 source("~/Dropbox/R_package_testing/brmsish/R/read_summary.R")
-source("~/Dropbox/R_package_testing/brmsish/R/check_rds_models.R")
+source("~/Dropbox/R_package_testing/brmsish/R/check_rds_fits.R")
+
+print_kable <- function(x) {
+  kb <- kable(x, row.names = TRUE, digits = 4, "html")
+  kb <- kable_styling(kb, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+  scroll_box(kb, width = "100%")
+}
+
+data_table <- function(x, digits = 3) {
+    if (is.matrix(x))
+        x <- as.data.frame(x)
+     datatable(x) |>
+        formatRound(columns = which(sapply(x, is.numeric)), 
+                    digits = digits)
+}
+
 
 ```
 
@@ -155,13 +160,13 @@ df <- df[order(df$Sample_size, decreasing = FALSE), ]
 
 kb <-kable(df, row.names = FALSE) 
   
-kb <- kable_styling(kb, bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+kb <- kable_styling(kb, bootstrap_options = c("striped", "hover", "condensed", "responsive"), position = "float_left")
   
 print(kb)
 
 ```
 
-## Add metadata
+# Add metadata
 ```{r, eval = TRUE}
 
 metadat <- read_excel_df("./data/raw/INBREStress_MasterDataSheet_14Nov19.xlsx")
@@ -314,8 +319,30 @@ sels <- sels[sels$week != 5, ]
 
 ```
 
-```{r prepare data for stats, eval = TRUE}
+## FOXP2
+```{r, eval = TRUE}
 
+foxp2 <- read.csv("./data/raw/INBREmale_IHCcounts_9Jun25.csv")
+
+foxp2$Treatment[grep("HIGH", foxp2$Treatment)] <- "High stress"
+foxp2$Treatment[grep("Control", foxp2$Treatment, ignore.case = T)] <- "Control"
+foxp2$Treatment[grep("MED", foxp2$Treatment)] <- "Medium stress"
+
+foxp2$Treatment <- factor(foxp2$Treatment, levels = c("Control", "Medium stress",
+    "High stress"))
+
+ggplot(data = foxp2, aes(x = Treatment, y = FoxP2.Counts.MMSt.Striatum, fill = Treatment)) +
+    geom_boxplot() + geom_point() + 
+scale_fill_viridis_d(begin = 0.1, end = 0.9) + 
+labs(y = "% FoxP2 expression", x = "Treatment") + theme_classic(base_size = 30) +
+    # scale_x_discrete( labels = c(1:4)) +
+theme(legend.position = "none")
+
+data_table(foxp2)
+```
+
+## Correlation matrices
+```{r prepare data for stats, eval = TRUE}
 agg_dat <- aggregate(selec ~ ID + week, data = sels, length)
 
 # compare to week 1 agg_dat$call.count <- sapply(1:nrow(agg_dat), function(x) {
@@ -438,7 +465,283 @@ agg_dat$round <- sapply(1:nrow(agg_dat), function(x) unique(sels$round[sels$ID =
     agg_dat$ID[x]]))
 
 
+agg_dat$foxp2 <- sapply(1:nrow(agg_dat), function(x) {
+  if (agg_dat$week[x] == 4)
+     fp2 <- foxp2$FoxP2.Counts.MMSt.Striatum[foxp2$Bird.ID == agg_dat$ID[x]][1] else fp2 <-NA
+     # print(length(fp2))
+    if (length(fp2) == 0) fp2 <- NA
+     return(fp2)
+}
+)
 ```
+
+### Day 3
+```{r correlations day 3, eval = TRUE, results='html'}
+agg_dat$...foxp2 <- sapply(agg_dat$ID, function(x) {
+    
+    fp2 <- foxp2$FoxP2.Counts.MMSt.Striatum[foxp2$Bird.ID == x][1]
+
+    if (length(fp2) == 0) fp2 <- NA
+    
+    return(fp2)
+})
+
+day3_agg <- agg_dat[agg_dat$week == 3, c("ID", "breath.rate", "weight", "baseline.CORT", "stress.CORT", "call.count", "acustic.plasticity", "acoustic.convergence", "acoustic.diversity", "...foxp2")]
+
+print("Raw data:")
+
+data_table(day3_agg, 4)
+
+day3_agg$ID <- NULL
+
+corr_mat <- cor(day3_agg, use = "pairwise.complete.obs")
+
+pvalue_mat <- corr_mat
+pvalue_mat <- pvalue_mat * NA
+
+for(i in colnames(pvalue_mat)){
+    for(e in rownames(pvalue_mat)){
+        
+    if (sum(complete.cases(day3_agg[, i], day3_agg[, e])) > 2)    
+    ct <- cor.test(
+    x = day3_agg[, i],
+    y = day3_agg[,e],
+    method = "pearson",
+    use = "pairwise.complete.obs"
+)$p.value
+    
+    else ct <- NA
+pvalue_mat[i, e] <- ct
+    pvalue_mat[e, i] <- ct
+    }
+}
+n_mat <- corr_mat
+n_mat <- n_mat * NA
+
+for(i in colnames(pvalue_mat)){
+    for(e in rownames(pvalue_mat)){
+n_mat[i, e] <-  sum(complete.cases(day3_agg[, i], day3_agg[, e]))
+    }
+}
+
+
+# write.csv(pm, "./output/parameters_correlation_pvalues.csv", row.names = TRUE)
+# 
+# write.csv(pm2, "./output/sample_sizes.csv", row.names = TRUE)
+
+# make color scale
+colorrange <- colorRampPalette(c("skyblue", "white", "tomato"))(10)
+colorrange2 <- colorRampPalette(c("skyblue", "gray", "tomato"))(10)
+
+
+rownames(corr_mat) <- colnames(corr_mat) <- names(day3_agg) <- c("breath\nrate", "weight", "baseline\nCORT", "stress\nCORT", "vocal\noutput", "vocal\nplasticity", "vocal\nconver-\ngence", "vocal\ndiversity", "FOXP2")
+
+# jpeg("./output/parameters_correlation_matrix.jpg", width = 1800, height = 1800, res = 300)
+
+corrplot.mixed(
+    corr_mat,
+    p.mat = pvalue_mat,
+    sig.level = 0.05, insig = "pch",
+    pch = "x",
+    pch.col = "gray",
+    pch.cex = 0.9,
+    upper = "ellipse",
+    lower = "number",
+    tl.col = "black",
+    tl.srt = 45,
+    number.cex = 0.7,
+    tl.cex = 0.7,
+    order = "original",
+    mar = c(1, 1, 1, 1),
+    upper.col = colorrange,
+    lower.col =  colorrange2
+)
+
+# dev.off()
+
+print("p values:")
+data_table(pvalue_mat, 4)
+ 
+print("sample sizes:")
+data_table(n_mat, 0)
+
+```
+
+### Day 4
+```{r correlations day 4, eval = TRUE, results='asis'}
+
+day4_agg <- agg_dat[agg_dat$week == 4, c("ID", "breath.rate", "weight", "baseline.CORT", "stress.CORT", "call.count", "acustic.plasticity", "acoustic.convergence", "acoustic.diversity", "foxp2")]
+
+print("Raw data:")
+
+data_table(day4_agg)
+
+day4_agg$ID <- NULL
+
+corr_mat <- cor(day4_agg, use = "pairwise.complete.obs")
+
+pvalue_mat <- corr_mat
+pvalue_mat <- pvalue_mat * NA
+
+for(i in colnames(pvalue_mat)){
+    for(e in rownames(pvalue_mat)){
+        
+    ct <- cor.test(
+    x = day4_agg[, i],
+    y = day4_agg[,e],
+    method = "pearson",
+    use = "pairwise.complete.obs"
+)$p.value
+    
+pvalue_mat[i, e] <- ct
+    pvalue_mat[e, i] <- ct
+    }
+}
+n_mat <- corr_mat
+n_mat <- n_mat * NA
+
+for(i in colnames(pvalue_mat)){
+    for(e in rownames(pvalue_mat)){
+n_mat[i, e] <-  sum(complete.cases(day4_agg[, i], day4_agg[, e]))
+    }
+}
+
+
+# write.csv(pm, "./output/parameters_correlation_pvalues.csv", row.names = TRUE)
+# 
+# write.csv(pm2, "./output/sample_sizes.csv", row.names = TRUE)
+
+# make color scale
+colorrange <- colorRampPalette(c("skyblue", "white", "tomato"))(10)
+colorrange2 <- colorRampPalette(c("skyblue", "gray", "tomato"))(10)
+
+
+rownames(corr_mat) <- colnames(corr_mat) <- names(day4_agg) <- c("breath\nrate", "weight", "baseline\nCORT", "stress\nCORT", "vocal\noutput", "vocal\nplasticity", "vocal\nconver-\ngence", "vocal\ndiversity", "FOXP2")
+
+# jpeg("./output/parameters_correlation_matrix.jpg", width = 1800, height = 1800, res = 300)
+
+corrplot.mixed(
+    corr_mat,
+    p.mat = pvalue_mat,
+    sig.level = 0.05, insig = "pch",
+    pch = "x",
+    pch.col = "gray",
+    pch.cex = 0.9,
+    upper = "ellipse",
+    lower = "number",
+    tl.col = "black",
+    tl.srt = 45,
+    number.cex = 0.7,
+    tl.cex = 0.7,
+    order = "original",
+    mar = c(1, 1, 1, 1),
+    upper.col = colorrange,
+    lower.col =  colorrange2
+)
+
+# dev.off()
+
+print("p values:")
+data_table(pvalue_mat, 4)
+ 
+print("sample sizes:")
+data_table(n_mat, 0)
+
+```
+
+### Day 3 and 4
+
+Averaged across the 2 weeks, excluding NAs
+```{r correlations day 3 and 4, eval = TRUE, results='asis'}
+
+day34_agg <- agg_dat[agg_dat$week %in% 3:4, c("ID", "breath.rate", "weight", "baseline.CORT", "stress.CORT", "call.count", "acustic.plasticity", "acoustic.convergence", "acoustic.diversity", "...foxp2")]
+
+print("Raw data:")
+
+data_table(day34_agg)
+
+day34_agg <- aggregate(day34_agg[, -1], 
+    by = list(ID = day34_agg$ID), 
+    FUN = mean, 
+    na.rm = TRUE)
+
+print("Averaged data:")
+
+data_table(day34_agg)
+
+day34_agg$ID <- NULL
+
+corr_mat <- cor(day34_agg, use = "pairwise.complete.obs")
+
+pvalue_mat <- corr_mat
+pvalue_mat <- pvalue_mat * NA
+
+for(i in colnames(pvalue_mat)){
+    for(e in rownames(pvalue_mat)){
+        
+    ct <- cor.test(
+    x = day34_agg[, i],
+    y = day34_agg[,e],
+    method = "pearson",
+    use = "pairwise.complete.obs"
+)$p.value
+    
+pvalue_mat[i, e] <- ct
+    pvalue_mat[e, i] <- ct
+    }
+}
+n_mat <- corr_mat
+n_mat <- n_mat * NA
+
+for(i in colnames(pvalue_mat)){
+    for(e in rownames(pvalue_mat)){
+n_mat[i, e] <-  sum(complete.cases(day34_agg[, i], day34_agg[, e]))
+    }
+}
+
+
+# write.csv(pm, "./output/parameters_correlation_pvalues.csv", row.names = TRUE)
+# 
+# write.csv(pm2, "./output/sample_sizes.csv", row.names = TRUE)
+
+# make color scale
+colorrange <- colorRampPalette(c("skyblue", "white", "tomato"))(10)
+colorrange2 <- colorRampPalette(c("skyblue", "gray", "tomato"))(10)
+
+
+rownames(corr_mat) <- colnames(corr_mat) <- names(day34_agg) <- c("breath\nrate", "weight", "baseline\nCORT", "stress\nCORT", "vocal\noutput", "vocal\nplasticity", "vocal\nconver-\ngence", "vocal\ndiversity", "FOXP2")
+
+# jpeg("./output/parameters_correlation_matrix.jpg", width = 1800, height = 1800, res = 300)
+
+corrplot.mixed(
+    corr_mat,
+    p.mat = pvalue_mat,
+    sig.level = 0.05, insig = "pch",
+    pch = "x",
+    pch.col = "gray",
+    pch.cex = 0.9,
+    upper = "ellipse",
+    lower = "number",
+    tl.col = "black",
+    tl.srt = 45,
+    number.cex = 0.7,
+    tl.cex = 0.7,
+    order = "original",
+    mar = c(1, 1, 1, 1),
+    upper.col = colorrange,
+    lower.col =  colorrange2
+)
+
+# dev.off()
+
+print("p values:")
+data_table(pvalue_mat, 4)
+ 
+print("sample sizes:")
+data_table(n_mat, 0)
+
+```
+
 
 # Physiological parameters
 
@@ -549,7 +852,7 @@ gg_coeffs_physio <- lapply(physio_models, function(x){
     vars <- grep("b_", posterior::variables(x), value = TRUE)
     draws <- posterior::as_draws_array(x, variable = vars)
 
-    coef_table <- draw_summary(draws, variables = vars, probs = c(0.025, 0.975), robust = TRUE)
+    coef_table <- draw_summary(draws, variables = vars, probs = c(0.025, 0.975), robust = TRUE, spread.type = "HPDI")
     
     coef_table$predictor <- rownames(coef_table)
     coef_table$predictor <- gsub("b_treatment|b_", "", coef_table$predictor)
@@ -641,7 +944,7 @@ saveRDS(physio_models, "./data/processed/physiological_response_models.RDS")
 physio_models <- readRDS("./data/processed/physiological_response_models.RDS")
 
 for (x in 1:length(physio_models)) 
-    html_summary(physio_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE, model.name = names(physio_models)[x])
+    extended_summary(physio_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE)
    
 ```
 
@@ -687,8 +990,9 @@ sels <- data.frame(sels, Y)
 sels$treatment <- factor(sels$treatment, levels = c("Control", "Medium Stress", "High Stress"))
 
 ggplot(sels, aes(x = TSNE1, y = TSNE2, col = as.factor(treatment))) + geom_point() +
-    labs(color = "Treatment") + scale_color_viridis_d(alpha = 0.4) + theme_classic(base_size = 25) + 
+    labs(color = "Treatment") + scale_color_viridis_d(alpha = 0.4, begin = 0.1, end = 0.9) + theme_classic(base_size = 25) + 
     guides(colour = guide_legend(override.aes = list(size = 10)))
+
 ```
 
 
@@ -716,7 +1020,7 @@ agg_behav <- merge(agg_call.count, agg_behav, all = TRUE)
 
 agg_behav <- cbind(agg_behav, agg_behav_se[ , 3:6])
 
-bs <- 10
+bs <- 17
 
 agg_behav$treatment <- factor(agg_behav$treatment, levels = c("Control", "Medium Stress",
 "High Stress"))
@@ -762,7 +1066,7 @@ gg_coeffs_behav <- lapply(behav_models, function(x){
     vars <- grep("b_", posterior::variables(x), value = TRUE)
     draws <- posterior::as_draws_array(x, variable = vars)
 
-    coef_table <- draw_summary(draws, variables = vars, probs = c(0.025, 0.975), robust = TRUE)
+    coef_table <- draw_summary(draws, variables = vars, probs = c(0.025, 0.975), robust = TRUE, spread.type = "HPDI")
     
     coef_table$predictor <- rownames(coef_table)
     coef_table$predictor <- gsub("b_treatment|b_", "", coef_table$predictor)
@@ -858,7 +1162,7 @@ behav_models <- readRDS("./data/processed/behavioral_response_models.RDS")
 
 
 for (x in 1:length(behav_models)) 
-    html_summary(behav_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE, model.name = names(behav_models)[x])
+    extended_summary(behav_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE)
    
 ```
 
@@ -883,7 +1187,7 @@ for (x in 1:length(behav_models))
 
 ```{r, eval = TRUE, results='asis'}
 
-check_rds_models(path = "./data/processed", html = TRUE, verbose = FALSE)
+check_rds_fits(path = "./data/processed", html = TRUE, verbose = FALSE)
 
 ```
 
