@@ -317,11 +317,6 @@ sels$breath.count <- sapply(1:nrow(sels), function(x) {
 # remove week 5
 sels <- sels[sels$week != 5, ]
 
-```
-
-## FOXP2
-```{r, eval = TRUE}
-
 foxp2 <- read.csv("./data/raw/INBREmale_IHCcounts_9Jun25.csv")
 
 foxp2$Treatment[grep("HIGH", foxp2$Treatment)] <- "High stress"
@@ -331,14 +326,6 @@ foxp2$Treatment[grep("MED", foxp2$Treatment)] <- "Medium stress"
 foxp2$Treatment <- factor(foxp2$Treatment, levels = c("Control", "Medium stress",
     "High stress"))
 
-ggplot(data = foxp2, aes(x = Treatment, y = FoxP2.Counts.MMSt.Striatum, fill = Treatment)) +
-    geom_boxplot() + geom_point() + 
-scale_fill_viridis_d(begin = 0.1, end = 0.9) + 
-labs(y = "% FoxP2 expression", x = "Treatment") + theme_classic(base_size = 30) +
-    # scale_x_discrete( labels = c(1:4)) +
-theme(legend.position = "none")
-
-data_table(foxp2)
 ```
 
 ## Correlation matrices
@@ -922,29 +909,39 @@ physio_models <- lapply(1:nrow(formulas), function(x) {
     sub_dat <- sub_agg_dat[!is.na(sub_agg_dat[names(sub_agg_dat) == formulas$responses[x]]),
         ]
     sub_dat
-
-    mod <- brm(formula = paste(formulas$responses[x], formulas$predictors[x]),
-        iter = 20000, silent = 2, data = sub_dat, control = list(adapt_delta = 0.9),
+# replace ~ by "by" in the formula
+    mod_name <- paste(formulas$responses[x],gsub("~", "by", formulas$predictors[x]))
+    
+    mod <- brm(
+        formula = paste(formulas$responses[x], formulas$predictors[x]),
+        iter = 50000,
+        silent = 2,
+        data = sub_dat,
+        control = list(adapt_delta = 0.9, max_treedepth = 15),
         chains = 4,
-        prior = c(prior(normal(0, 5), "b"), prior(normal(0, 10), "Intercept"),
-    prior(student_t(3, 0, 10), "sd"), prior(student_t(3, 0, 10), "sigma")))
+        cores = 4,
+        file = paste0("./data/processed/updated_regressions/physio-", mod_name),
+        file_refit = "always",
+        prior = c(
+            prior(normal(0, 5), "b"),
+            prior(normal(0, 10), "Intercept"),
+            prior(student_t(3, 0, 10), "sd"),
+            prior(student_t(3, 0, 10), "sigma")
+        )
+    )
 
     return(mod)
 })
 
 
-names(physio_models) <- paste(formulas$responses, formulas$predictors)
-
-saveRDS(physio_models, "./data/processed/physiological_response_models.RDS")
-
 ```
 
 ```{r, results = 'asis'}
 
-physio_models <- readRDS("./data/processed/physiological_response_models.RDS")
+physio_models <- list.files("./data/processed/updated_regressions", pattern = "physio-", full.names = TRUE)
 
 for (x in 1:length(physio_models)) 
-    extended_summary(physio_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE)
+    extended_summary(read.file = physio_models[x], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = TRUE, remove.intercepts = TRUE)
    
 ```
 
@@ -956,7 +953,7 @@ for (x in 1:length(physio_models))
 
 ## Takeaways
 
--  Breath rate decreases gradually with time across after the first week
+-  Breath rate decreases gradually across time after the first week
 
 -  Stress response is higher in "high stress" birds compared to first week
 
@@ -1139,30 +1136,40 @@ behav_models <- lapply(1:nrow(formulas), function(x) {
     # remove week 1
     if (!grepl("count|group", formulas$responses[x]))
         sub_dat <- sub_dat[sub_dat$week != 1, ] 
+ 
+    mod_name <- paste(formulas$responses[x], gsub("~", "by", formulas$predictors[x]))
+    
+    
+    mod <- brm(
+        formula = paste(formulas$responses[x], formulas$predictors[x]),
+        iter = 50000,
+        silent = 2,
+        data = sub_dat,
+        control = list(adapt_delta = 0.9, max_treedepth = 15),
+        chains = 4,
+        cores = 4,
+         file = paste0("./data/processed/updated_regressions/behav-", mod_name),
+        file_refit = "always",
+        prior = c(
+            prior(normal(0, 5), "b"),
+            prior(normal(0, 10), "Intercept"),
+            prior(student_t(3, 0, 10), "sd"),
+            prior(student_t(3, 0, 10), "sigma")
+        )
+    )
 
-    mod <- brm(formula = paste(formulas$responses[x], formulas$predictors[x]),
-        iter = 50000, silent = 2, data = sub_dat, control = list(adapt_delta = 0.9, max_treedepth = 15),
-        chains = 4, prior = c(prior(normal(0, 5), "b"), prior(normal(0, 10), "Intercept"),
-    prior(student_t(3, 0, 10), "sd"), prior(student_t(3, 0, 10), "sigma"))
-)
-
-        return(mod)
+        return(NULL)
 })
 
-
-names(behav_models) <- paste(formulas$responses, formulas$predictors)
-
-saveRDS(behav_models, "./data/processed/behavioral_response_models.RDS")
 
 ```
 
 ```{r, results = 'asis'}
 
-behav_models <- readRDS("./data/processed/behavioral_response_models.RDS")
-
+behav_models <- list.files("./data/processed/updated_regressions", pattern = "behav-", full.names = TRUE)
 
 for (x in 1:length(behav_models)) 
-    extended_summary(behav_models[[x]], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = FALSE, remove.intercepts = TRUE)
+    extended_summary(read.file = behav_models[x], gsub.pattern = "b_treatment|b_", gsub.replacement = "", highlight = TRUE, remove.intercepts = TRUE)
    
 ```
 
@@ -1174,20 +1181,187 @@ for (x in 1:length(behav_models))
 
 -  Higher vocal output in "high stress" birds compared to control
 
--  Higher acoustic overlap to themselves in week 1 for "high stress" birds compared to control
+-  Lower acoustic plasticity to themselves in week 1 for "high stress" birds compared to control
 
--  Decrease in overlap to themselves in week 1 across time
+-  Increase inacoustic plasticity over time
 
 </div>
 
 &nbsp;
 
 
+
+# FOXP2
+
+## FoxP2 positive cells in MMST:VSP
+
+```{r, eval = TRUE}
+
+data_table(foxp2)
+ 
+
+```
+
+### Stats
+
+```{r, eval = FALSE}
+foxp2_mod <- brm(
+        formula = FoxP2.Counts.MMSt.Striatum ~ Treatment,
+        iter = 50000,
+        family = Gamma(link = "log"),
+        silent = 2,
+        data = foxp2,
+        control = list(adapt_delta = 0.9, max_treedepth = 15),
+        chains = 4,
+        cores = 4,
+        file = "./data/processed/updated_regressions/foxp2_by_treatment_model",
+        file_refit = "on_change",
+        prior = c(
+            prior(normal(0, 5), "b"),
+            prior(normal(0, 10), "Intercept")
+        )
+    )
+```
+
+
+```{r, eval = TRUE, results='asis'}
+
+extended_summary(read.file = "./data/processed/updated_regressions/foxp2_by_treatment_model.rds",
+    gsub.pattern = "b_treatment|b_",
+    gsub.replacement = "",
+    highlight = TRUE,
+    remove.intercepts = TRUE
+)
+   
+```
+
+
+## FoxP2 mRNA expression MMST:VSP
+
+```{r, eval = TRUE}
+
+qpcr <- read.csv("./data/raw/INBREmale_qPCR_10Jun25.csv")
+
+```
+
+### Stats
+
+```{r, eval = FALSE}
+qpcr <- brm(
+        formula = FoxP2.mRNA.MMST.VSP ~ Treatment,
+        iter = 50000,
+        family = Gamma(link = "log"),
+        silent = 2,
+        data = qpcr,
+        control = list(adapt_delta = 0.9, max_treedepth = 15),
+        chains = 4,
+        cores = 4,
+        file = "./data/processed/updated_regressions/qpcr_by_treatment_model",
+        file_refit = "on_change",
+        prior = c(
+            prior(normal(0, 5), "b"),
+            prior(normal(0, 10), "Intercept")
+        )
+    )
+
+```
+
+
+```{r, eval = TRUE, results='asis'}
+
+extended_summary(read.file = "./data/processed/updated_regressions/qpcr_by_treatment_model.rds",
+    gsub.pattern = "b_treatment|b_",
+    gsub.replacement = "",
+    highlight = TRUE,
+    remove.intercepts = TRUE
+)
+   
+```
+
+Barplot and effect sizes graph
+```{r, eval = TRUE, out.width="120%", out.height="200%"}
+
+# order levels
+foxp2$Treatment <- factor(foxp2$Treatment, levels = c("CONTROL", "MEDIUM", "HIGH"))
+
+
+gg_foxp2 <- ggplot(data = foxp2,
+       aes(x = Treatment, y = FoxP2.Counts.MMSt.Striatum, fill = Treatment)) +
+    geom_boxplot() + geom_point() +
+    scale_x_discrete(labels = c("CONTROL" = "Control", "MEDIUM" = "Medium\nstress",
+        "HIGH" = "High\nstress")) +
+    scale_fill_viridis_d(begin = 0.1, end = 0.9) +
+    labs(y = "FoxP2 positive\ncells in MMST:VSP", x = "Treatment") + theme_classic(base_size = 30) +
+    theme(legend.position = "none")
+
+gg_qpcr <- ggplot(data = qpcr,
+       aes(x = Treatment, y = FoxP2.mRNA.MMST.VSP, fill = Treatment)) +
+    geom_boxplot() + geom_point() +
+      scale_x_discrete(labels = c("Control" = "Control", "High Stress" = "High\nstress")) +
+    scale_fill_viridis_d(begin = 0.1, end = 0.9) +
+    labs(y = "FoxP2 mRNA\nexpression MMST:VSP", x = "Treatment") + theme_classic(base_size = 30) +
+    theme(legend.position = "none")
+
+
+foxp2_cells_mod <- readRDS("./data/processed/updated_regressions/foxp2_by_treatment_model.rds")
+qpcr_mod <- readRDS("./data/processed/updated_regressions/qpcr_by_treatment_model.rds")
+
+gg_coeffs_foxp2 <- lapply(list(foxp2_cells_mod, qpcr_mod), function(x){
+    
+    vars <- grep("b_", posterior::variables(x), value = TRUE)
+    draws <- posterior::as_draws_array(x, variable = vars)
+
+    coef_table <- draw_summary(draws, variables = vars, probs = c(0.025, 0.975), robust = TRUE, spread.type = "HPDI")
+    
+    coef_table$predictor <- rownames(coef_table)
+    coef_table$predictor <- gsub("b_treatment|b_", "", coef_table$predictor)
+    coef_table$predictor <- gsub("Stress", " stress", coef_table$predictor)
+    coef_table$predictor <- gsub("week", "Week", coef_table$predictor)
+    coef_table$predictor <- gsub("Treatment", "", coef_table$predictor)
+    coef_table$predictor <- gsub("Mediumstress", "Medium stress", coef_table$predictor)
+    coef_table$predictor <- gsub("Highstress", "High stress", coef_table$predictor)
+    coef_table <- coef_table[coef_table$predictor != "Intercept", ]
+    
+gg_coef <- ggplot2::ggplot(data = coef_table, aes(x = Estimate, y = predictor)) +
+    geom_vline(xintercept = 0, lty = 2) +
+    ggplot2::geom_point(size = 4, col = col_pointrange) +
+    ggplot2::geom_errorbar(ggplot2::aes(xmin = `l-95% CI`, xmax = `u-95% CI`),
+                             width = 0, col = col_pointrange) +
+      ggplot2::theme_classic(base_size = bs) +
+      ggplot2::theme(
+        axis.ticks.length = ggplot2::unit(0, "pt"),
+        plot.margin = ggplot2::margin(0, 0, 0, 0, "pt"),
+        legend.position = "none",
+        strip.background = ggplot2::element_blank(),
+        strip.text = ggplot2::element_blank()
+      ) +
+      ggplot2::labs(x = "Effect size", y = "")
+
+      return(gg_coef)  
+})
+
+cowplot::plot_grid(
+    gg_foxp2,
+    gg_qpcr, 
+    gg_coeffs_foxp2[[1]] + theme_classic(base_size = bs), 
+    gg_coeffs_foxp2[[2]] + theme_classic(base_size = bs), 
+    nrow = 2, rel_heights = c(1.8, 1))
+
+# try bs = 20 for saving plots
+
+# cowplot::ggsave2(filename = "./output/bar_graphs_and_estimates_foxp2_70dpi.jpeg", width = 15, height = 10)
+# 
+# cowplot::ggsave2(filename = "./output/bar_graphs_and_estimates_foxp2_300dpi.jpeg", dpi = 300, width = 15, height = 10)
+
+```
+
+
+
 # Combined model diagnostics
 
 ```{r, eval = TRUE, results='asis'}
 
-check_rds_fits(path = "./data/processed", html = TRUE, verbose = FALSE)
+check_rds_fits(path = "./data/processed/updated_regressions", html = TRUE)
 
 ```
 
