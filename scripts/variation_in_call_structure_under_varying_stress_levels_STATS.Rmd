@@ -1281,15 +1281,11 @@ extended_summary(read.file = "./data/processed/updated_regressions/qpcr_by_treat
 Barplot and effect sizes graph
 ```{r, eval = TRUE, out.width="120%", out.height="200%"}
 
-# order levels
-foxp2$Treatment <- factor(foxp2$Treatment, levels = c("CONTROL", "MEDIUM", "HIGH"))
-
-
 gg_foxp2 <- ggplot(data = foxp2,
        aes(x = Treatment, y = FoxP2.Counts.MMSt.Striatum, fill = Treatment)) +
     geom_boxplot() + geom_point() +
-    scale_x_discrete(labels = c("CONTROL" = "Control", "MEDIUM" = "Medium\nstress",
-        "HIGH" = "High\nstress")) +
+    scale_x_discrete(labels = c("Control" = "Control", "Medium stress" = "Medium\nstress",
+        "High stress" = "High\nstress")) +
     scale_fill_viridis_d(begin = 0.1, end = 0.9) +
     labs(y = "FoxP2 positive\ncells in MMST:VSP", x = "Treatment") + theme_classic(base_size = 30) +
     theme(legend.position = "none")
